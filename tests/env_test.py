@@ -1,6 +1,6 @@
-from deepred.env.enums import BagItem
-from deepred.env.polaris_red import PolarisRed
-from deepred.env.rewards import Goals
+from deepred.polaris_env.enums import BagItem
+from deepred.polaris_env.polaris_red import PolarisRed
+from deepred.polaris_env.rewards import Goals
 from deepred.polaris_utils.counting import HashScales
 
 human_test = True

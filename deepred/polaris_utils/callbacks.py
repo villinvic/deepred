@@ -9,7 +9,7 @@ class Callbacks(
     EpisodeCallbacks
 ):
     """
-    For now we only use this to send the env metrics to be logged.
+    For now we only use this to send the polaris_env metrics to be logged.
     """
 
     def on_episode_end(
