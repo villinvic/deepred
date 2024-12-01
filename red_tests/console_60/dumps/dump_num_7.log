@@ -1,0 +1,38 @@
+dump message: 'Stuck stepping the console.'.
+badges: [0, 0, 0, 0, 0, 0, 0, 0]
+bag_items: {<BagItem.POKE_BALL: 4>: 2}
+battle_type: 1
+dialog_state: 0
+event_flags: [1 0 0 0 0 0 1 1 1 1 0 1 0 1 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+ 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+frame: 292341
+is_playing_party_animations: 0
+item_cursor_x: 0
+item_cursor_y: 1
+map: Map.ROUTE_1
+open_text_box: False
+open_town_map: True
+party_experience: [229, 0, 0, 0, 0, 0]
+party_hp: [0.9999999995, 0.0, 0.0, 0.0, 0.0, 0.0]
+party_level: [6, 0, 0, 0, 0, 0]
+party_pokemons: [<Pokemon.CHARMANDER: 176>, <Pokemon.NONE: 255>, <Pokemon.M_GLITCH: 0>, <Pokemon.M_GLITCH: 0>, <Pokemon.M_GLITCH: 0>, <Pokemon.M_GLITCH: 0>]
+player_money: 2775
+pos_x: 15
+pos_y: 28
+sent_out: 0
+species_caught_count: 1
+species_seen_count: 4
+start_menu_item: StartMenuItem.UNSELECTED
+textbox_id: 1
