@@ -172,59 +172,6 @@ class PolarisRed(PolarisEnv):
 
 
 
-if __name__ == '__main__':
-
-    conf = dict(
-        render=True,
-        debug=False,
-        session_path=Path("red_tests"),
-        headless=False,
-        init_state="faster_red_post_parcel_pokeballs.state",
-        max_steps=1024,
-        fast_video=False,
-        save_video=False,
-        additional_steps_per_episode=1,
-        save_final_state=True,
-        gb_path="faster_red.gbc",
-
-    )
-
-    env = PolarisRed(env_index=0, **conf)
-    action_dict = {
-    "[A": 3,
-    "[B": 0,
-    "[D": 1,
-    "[C": 2,
-    "": 4,
-    "0": 5,
-    "5": 6
-}
-
-    obs, _ = env.reset()
-    done = {"__all__": False}
-    try:
-        while not done["__all__"]:
-
-            inputs = input("input:").split("\x1b")
-            if len(inputs) == 1:
-                i = inputs[0]
-                if i not in action_dict:
-                    i = ""
-
-                _, _, _, done, _ = env.step({0: action_dict[i]})
-
-            else:
-                for i in inputs[1:]:
-                    if i not in action_dict:
-                        i = ""
-
-                    _, _, _, done, _ = env.step({0: action_dict[i]})
-    except Exception as e:
-        print(e)
-
-
-
-
 
 
 
