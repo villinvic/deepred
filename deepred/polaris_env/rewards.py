@@ -9,44 +9,22 @@ from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_utils.counting import HashScales, hash_function
 
 
-# self.ball_price_to_item_value = {
-#     200: 1, # pokeball
-#     600: 2, # greatball
-#     1200: 1.5, # ultraball
-#     0: 2, # ball was obtained
-# }
-#
-# self.heal_price_to_item_value = {
-#     3000 : 4,  # full restore
-#     2500: 4,  # max potion
-#     1500 : 3,  # hyper potion
-#     1200: 1.5,  # ultraball
-#     0   : 5,  # ball was obtained
-# }
-
-# self.reward_function_config = {
-#     BLACKOUT: - 0.05,
-#     SEEN_POKEMONS: 0.3,
-#     TOTAL_EXPERIENCE: 20.,  # 0.5
-#     BADGE_SUM: 100.,
-#     MAPS_VISITED: 0.2,  # 3.
-#     TOTAL_EVENTS_TRIGGERED: 0.06,  # TODO : bugged
-#     MONEY: 10.,
-    # COORDINATES              :   - 5e-4,
-    # COORDINATES + "_NEG"     :   0.003 * 0.9,
-    # COORDINATES + "_POS"     :   0.003,
-    #PARTY_HEALTH: 3.,
-
-    # GOAL_TASK                :  0.5,
-
-    # ITEMS                    :  0.1,
-
-
 class Goals(NamedTuple):
     """
     Rewards collected by the agent each step.
     The remaining rewards will be on the Polaris side
     (we need to communicate visitation stats between the learner and the workers).
+
+    # Rewards used by:
+    # https://github.com/CJBoey/PokemonRedExperiments1/blob/master/baselines/boey_baselines2/red_gym_env.py
+    # secret switch states
+    # first time healing in a new pokecenter
+    # getting hms (bonus for usable ones)
+    # healing / blackouts
+    # triggering events
+    # special key items
+    # some "special" rewards
+
     """
     seen_pokemons: float = 0
     badges: float = 0

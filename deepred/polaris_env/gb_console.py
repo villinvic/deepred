@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Union, Tuple
 
 import mediapy
 import numpy as np
@@ -8,7 +8,8 @@ from pyboy import PyBoy
 from pyboy.utils import WindowEvent
 from PIL import Image
 from deepred.polaris_env.action_space import PolarisRedActionSpace
-from deepred.polaris_env.enums import StartMenuItem, EventFlag, BagItem
+from deepred.polaris_env.enums import StartMenuItem, EventFlag, BagItem, RamLocation
+from deepred.polaris_env.game_patching import AgentHelper, GamePatching
 from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.observation_space import PolarisRedObservationSpace
 
@@ -37,6 +38,7 @@ class GBConsole(PyBoy):
             record_skipped_frames: bool = False,
             output_dir: Path = Path("deepred_console"),
             savestate: Union[None, str] = None,
+            enabled_patches: Tuple[str] = (),
             **kwargs
     ):
         """
@@ -49,6 +51,7 @@ class GBConsole(PyBoy):
         :param output_dir: Output directory for the console: screenshots, videos, dumps, etc.
         :param savestate: If None, loads the game normally, otherwise, boots the game starting from the given state.
         :param kwargs: Additional parameters to pass to the PyBoy constructor.
+        :param patch: patches the game to make it more RL-friendly.
         """
         self.console_id = console_id
 
@@ -57,6 +60,10 @@ class GBConsole(PyBoy):
             window='SDL2' if render else 'null',
             **kwargs
         )
+        self._ram_helper = self.game_wrapper()
+
+        self.game_patcher = GamePatching(enabled_patches)
+        self.agent_helper = AgentHelper()
 
         self.render = render
         self.min_frame_skip = 20
@@ -172,27 +179,30 @@ class GBConsole(PyBoy):
 
         # we already ticked 8 frames
         frames_to_skip =  self.min_frame_skip - 1 - 8
-        map = self._gamestate.map
-        in_battle = self._gamestate.is_in_battle()
+        additional_skip = 0
         while total_frames_ticked <= frames_to_skip:
             gamestate = self.tick(skip_count, self.record_skipped_frames or self.render)
             total_frames_ticked += skip_count
             if (
-                    map != gamestate.map
+                    self._gamestate.map != gamestate.map
                 or
-                    in_battle and not gamestate.is_in_battle()
+                    self._gamestate.is_in_battle and not gamestate.is_in_battle
             ):
                 frames_to_skip += 33
 
-            map = gamestate.map
-            in_battle = gamestate.is_in_battle()
+            # map = gamestate.map
+            # in_battle = gamestate.is_in_battle
             self._gamestate = gamestate
+            if self._gamestate.is_skippable_frame():
+                total_frames_ticked -= skip_count * 0.75
+                additional_skip += 1
+                if additional_skip > 500:
+                    self.handle_error("stuck skipping.")
 
         self._gamestate = self.tick(1, render=True)
 
-        if self._gamestate.is_skippable_frame():
-            return self.skip_frames()
-
+        # Is this fine to patch here ?
+        self.game_patcher.patch(self._gamestate)
 
         return self._gamestate
 
@@ -213,6 +223,10 @@ class GBConsole(PyBoy):
         # ...
 
         return True
+
+    def set_instant_speed(self):
+        if not self._gamestate.instant_text:
+            self.memory[RamLocation.wd730] = self.memory[RamLocation.wd730] | (1<<6)
 
     def handle_error(
             self,

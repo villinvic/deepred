@@ -29,13 +29,15 @@ from deepred.polaris_env.gb_console import GBConsole
 from deepred.polaris_env.metrics import PolarisRedMetrics
 from deepred.polaris_env.observation_space import PolarisRedObservationSpace
 from deepred.polaris_env.rewards import PolarisRedRewardFunction, Goals
+from deepred.polaris_env.streaming import BotStreamer
 
 
 class PolarisRed(PolarisEnv):
     env_id = "PolarisRed"
 
-    # TODO: https://github.com/pwhiddy/pokerl-map-viz/
-    # visualise all instances in one single red map.
+    # This environment was inspired from
+    # https://github.com/CJBoey/PokemonRedExperiments1/blob/master/baselines/boey_baselines2/red_gym_env.py#L2373
+    # Although this is not a fork of their work, we employed many of their ideas.
 
     def __init__(
             self,
@@ -51,11 +53,13 @@ class PolarisRed(PolarisEnv):
             observed_items: Tuple[BagItem] = (BagItem.POKE_BALL, BagItem.POTION),
             reward_scales: dict  | None = None,
             savestate: Union[None, str] = None,
+            enabled_patches: Tuple[str] = (),
             session_path: str = "red_tests",
             render: bool = True,
             record: bool = False,
             speed_limit: int = 1,
             record_skipped_frame: bool = False,
+            stream: bool = True,
             ** config
     ):
         super().__init__(env_index, **config)
@@ -69,16 +73,17 @@ class PolarisRed(PolarisEnv):
 
         self.session_path.mkdir(exist_ok=True)
 
-        self.input_interface = PolarisRedActionSpace(
-            enable_start=enable_start,
-            enable_pass=enable_pass
-        )
         self.observation_interface = PolarisRedObservationSpace(
             downscaled_screen_shape=downscaled_screen_shape,
             framestack=framestack,
             stack_oldest_only=stack_oldest_only,
             observed_ram=observed_ram,
             observed_items=observed_items
+        )
+
+        self.input_interface = PolarisRedActionSpace(
+            enable_start=enable_start,
+            enable_pass=enable_pass
         )
 
         self.action_space = self.input_interface.gym_spec
@@ -94,8 +99,14 @@ class PolarisRed(PolarisEnv):
             record_skipped_frames=record_skipped_frame,
             output_dir=self.session_path / Path(f"console_{self.env_index}"),
             savestate=savestate,
+            enabled_patches=enabled_patches,
             **config
         )
+
+        self.stream = stream
+        if stream:
+            self.streamer = BotStreamer(self.env_index)
+
         self.console: Union[GBConsole, None] = None
 
         self.metrics : Union[PolarisRedMetrics, None] = None
@@ -154,6 +165,9 @@ class PolarisRed(PolarisEnv):
         }
         if done:
             self.on_episode_end()
+
+        if self.stream:
+            self.streamer.send(self.console.get_gamestate())
 
 
         return {0: self.input_dict}, {0: reward}, dones, dones, self.empty_info_dict

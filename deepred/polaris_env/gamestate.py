@@ -1,10 +1,13 @@
+from collections import defaultdict
 from pathlib import Path
 from typing import Union, List, Dict
 
 import numpy as np
 from PIL import Image
+from pyboy import PyBoy
 
-from deepred.polaris_env.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag
+from deepred.polaris_env.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
+    DataStructDimension
 from deepred.polaris_env.utils import cproperty
 
 B = 256
@@ -62,33 +65,33 @@ class GameState:
         :param console: the console from which the game ram will be read.
         """
         self._ram = console.memory
-
+        self._ram_helper = console._ram_helper
         self._frame = console._frame
         self.screen = np.uint8(console.screen.ndarray[:, :, 0])
 
 
         # we need to fetch those states no matter what. We need them for skipping frames
         self.start_menu_item
-        self.is_in_battle()
+        self.is_in_battle
 
     def is_skippable_frame(self) -> bool:
         """
         :return: Whether this frame can be skipped.
         """
-        return self.is_skippable_textbox() or self.is_transition_screen()
+        return self.is_skippable_textbox()
 
     def is_skippable_textbox(self) -> bool:
         """
         :return: True if we can skip the textbox by ticking
         """
         # TODO: find reliable way to skip dialogs...
-        return self.is_skippable_battle_frame() #or self.is_dialog_frame()
+        return self.is_skippable_battle_frame() or self.is_dialog_frame()
 
 
     def is_skippable_battle_frame(self):
         # We skip the frame if we are in battle, have a certain box id open or if we are in the party menu.
         return (
-                self.is_in_battle()
+                self.is_in_battle
                 and not (
                 self.textbox_id in {11, 12, 13, 20}
                 or
@@ -103,6 +106,7 @@ class GameState:
         # TODO: update this
         return self.is_playing_party_animations > 0
 
+    @cproperty
     def is_in_battle(self) -> bool:
         """
         :return: True if in battle
@@ -116,11 +120,12 @@ class GameState:
         """
         return (
                 self.start_menu_item == StartMenuItem.UNSELECTED
-                and not self.is_in_battle()
+                and not self.is_in_battle
                 and self.open_text_box
-                and not self.textbox_id in {6, 11, 12, 13, 14, 20}
+                and not self.textbox_id in {6, 11, 12, 13, 14, 20, 28}
                 and not self.is_playing_party_animations == 64
                 and not self.open_town_map
+                and (self.item_cursor_x, self.item_cursor_y) == (0, 0)
         )
 
     def is_transition_screen(self) -> bool:
@@ -139,11 +144,11 @@ class GameState:
         :return: True if we are at a pokecenter.
         """
         return self.map in [
-            Map.POKEMON_CENTER_ROUTE_4, Map.POKEMON_CENTER_PEWTER_CITY, Map.DAYCARE_CENTER_ROUTE_5,
-            Map.POKEMON_CENTER_CERULEAN_CITY, Map.POKEMON_CENTER_VIRIDIAN_CITY, Map.POKEMON_CENTER_CELADON_CITY,
-            Map.POKEMON_CENTER_ROCK_TUNNEL, Map.POKEMON_CENTER_LAVENDER_TOWN, Map.POKEMON_CENTER_FUCHSIA_CITY,
-            Map.POKEMON_CENTER_CINNABAR_ISLAND, Map.POKEMON_CENTER_SAFFRON_CITY, Map.POKEMON_CENTER_VERMILION_CITY,
-            Map.POKEMON_CENTER_INDIGO_PLATEAU
+            Map.MT_MOON_POKECENTER, Map.PEWTER_POKECENTER,
+            Map.CERULEAN_POKECENTER, Map.VIRIDIAN_POKECENTER, Map.CELADON_POKECENTER,
+            Map.ROCK_TUNNEL_POKECENTER, Map.LAVENDER_POKECENTER, Map.FUCHSIA_POKECENTER,
+            Map.CINNABAR_POKECENTER, Map.SAFFRON_POKECENTER, Map.VIRIDIAN_POKECENTER,
+            Map.INDIGO_PLATEAU_LOBBY
         ]
 
     def is_at_pokemart(self) -> bool:
@@ -151,9 +156,9 @@ class GameState:
         :return: True if we are at a pokemart.
         """
         return self.map in [
-            Map.POKE_MART_PEWTER_CITY, Map.POKE_MART_FUCHSIA_CITY, Map.POKE_MART_SAFFRON_CITY,
-            Map.POKE_MART_CERULEAN_CITY, Map.POKE_MART_VIRIDIAN_CITY, Map.POKE_MART_VERMILION_CITY,
-            Map.POKE_MART_CINNABAR_ISLAND, Map.POKE_MART_LAVENDER_TOWN, Map.POKE_MART__ALTERNATIVE_MUSIC_CINNABAR_ISLAND
+            Map.PEWTER_MART, Map.FUCHSIA_MART, Map.SAFFRON_MART,
+            Map.CERULEAN_MART, Map.VIRIDIAN_MART, Map.VERMILION_MART,
+            Map.CINNABAR_MART, Map.LAVENDER_MART, Map.CINNABAR_MART_COPY
         ]
 
     def _read(
@@ -237,8 +242,18 @@ class GameState:
         return self._frame
 
     @cproperty
-    def textbox_id(self) -> int:
-        return self._read(RamLocation.TEXTBOX_ID)
+    def instant_text(self) -> bool:
+        """
+        :return: True if we are using instant text.
+        """
+        return self._read(RamLocation.INSTANT_TEXT) & (2**6) > 0
+
+    @cproperty
+    def open_menu(self) -> int:
+        """
+        :returns: True if a menu is open.
+        """
+        return self._read(RamLocation.MENU_STATE) == 0
 
     @cproperty
     def is_playing_party_animations(self) -> int:
@@ -277,7 +292,7 @@ class GameState:
         """
         Returns true if we are looking at the town map now.
         """
-        return self._read(RamLocation.OPEN_TOWN_MAP) == 255
+        return self._read(RamLocation.TOWN_MAP_STATE) == 205
 
     @cproperty
     def party_pokemons(self) -> List[Pokemon]:
@@ -287,11 +302,36 @@ class GameState:
         return [Pokemon(ID) for ID in self._read(slice(RamLocation.PARTY_0_ID, RamLocation.PARTY_5_ID+1, 1))]
 
     @cproperty
+    def party_count(self) -> int:
+        """
+        :return: The number of pokemons in the current party
+        """
+        s = 0
+        for pokemon in self.party_pokemons:
+            if pokemon not in (Pokemon.NONE, Pokemon.M_GLITCH):
+                s += 1
+        return s
+
+    @cproperty
+    def textbox_id(self) -> int:
+        """
+        The id of the current textbox.
+        """
+        return self._read(RamLocation.TEXTBOX_ID)
+
+    @cproperty
     def open_text_box(self) -> bool:
         """
         :return: True if a textbox is currently open
         """
         return self._read(RamLocation.OPEN_TEXT_BOX) == 1
+
+    @cproperty
+    def box_pokemon_count(self) -> int:
+        """
+        The number of pokemons in the box.
+        """
+        return self._read(RamLocation.BOX_POKEMON_COUNT)
 
     @cproperty
     def item_cursor_x(self) -> int:
@@ -308,22 +348,23 @@ class GameState:
         return self._read(RamLocation.ITEM_CURSOR_Y)
 
     @cproperty
-    def dialog_state(self) -> int:
+    def open_start_menu(self) -> bool:
         """
-        :return: Returns the y coordinates (on the screen) of the topmost item cursor
+        :return: True if we are navigating in the start menu
         """
-        return self._read(RamLocation.DIALOG_STATE)
+        return self._read(RamLocation.OPEN_START_MENU) == 1
 
     @cproperty
     def start_menu_item(self) -> StartMenuItem:
         """
         :return: Start item currently selected, returns unselected if the menu is not open.
         """
-        correct_cursor_cords = self.item_cursor_x, self.item_cursor_y == (2, 11)
-        dialog_state = self._read(RamLocation.DIALOG_STATE)
-        start_menu_open = (self.map == Map.REDS_HOUSE_SECOND_FLOOR and dialog_state == 8) or dialog_state ==  113
+        # correct_cursor_cords = self.item_cursor_x, self.item_cursor_y == (2, 11)
+        # dialog_state = self._read(RamLocation.DIALOG_STATE)
+        # start_menu_open = (self.map == Map.REDS_HOUSE_SECOND_FLOOR and dialog_state == 8) or dialog_state ==  113
         # TODO: needs another check for which menu we are in exactly, cursor does not reset after closing the menu
-        if self.open_text_box and correct_cursor_cords and start_menu_open:
+        #if self.open_text_box and correct_cursor_cords and start_menu_open:
+        if self.open_start_menu:
             return StartMenuItem(self._read(RamLocation.MENU_ITEM_ID))
 
         return StartMenuItem.UNSELECTED
@@ -436,3 +477,174 @@ class GameState:
             bag_items[BagItem(item_type)] = item_count
 
         return bag_items
+
+    @cproperty
+    def safari_steps(self) -> int:
+        """
+        The number of steps taken in safari.
+        """
+        return self._read(RamLocation.SAFARI_STEPS)
+
+    @cproperty
+    def bottom_left_screen_tiles(self) -> np.ndarray:
+        """
+        :return: values of the bottom left tiles.
+        """
+        screen_tiles = self._ram_helper._get_screen_background_tilemap()
+        return screen_tiles[1:1 + screen_tiles.shape[0]:2, ::2] - 256
+
+    @cproperty
+    def bottom_right_screen_tiles(self) -> np.ndarray:
+        """
+        :return: values of the bottom right tiles.
+        """
+        screen_tiles = self._ram_helper._get_screen_background_tilemap()
+        return screen_tiles[1:1 + screen_tiles.shape[0]:2, 1::2] - 256
+
+    @cproperty
+    def tileset_id(self) -> Union[TileSet, int]:
+        tileset = self._read(RamLocation.TILESET)
+        try:
+            return TileSet(self._read(RamLocation.TILESET))
+        except:
+            return tileset
+
+    @cproperty
+    def hdst_map(self) -> int:
+        """
+        The state of the hdst map.
+        """
+        return self._read(RamLocation.HDST_MAP)
+
+    @cproperty
+    def num_warps(self) -> int:
+        """
+        The number of warps
+        """
+        return self._read(RamLocation.NUM_WARPS)
+
+    @cproperty
+    def standing_on_warp(self) -> bool:
+        """
+        :return: True if on warp (a hole is a warp).
+        """
+        return self._read(RamLocation.STANDING_ON_WARP_HOLE) == 1
+
+    @cproperty
+    def is_warping(self) -> bool:
+        """
+        :return: True if warping.
+        """
+        if (
+            (
+                (self._read(RamLocation.WD736) & 2**2) > 0
+                and
+                self.hdst_map in (255, self.map)
+            )
+            or
+            self.standing_on_warp
+        ):
+            return True
+
+        x, y = self.pos_x, self.pos_y
+        for i in range(self.num_warps):
+            warp_addr = RamLocation.WARP_ENTRIES + i * DataStructDimension.WARP
+            if self._read(warp_addr) == y and self._read(warp_addr + 1) == x:
+                return self.hdst_map in (255, self.map)
+
+    @cproperty
+    def minimap_sprite(self) -> np.ndarray:
+        """
+        A minimap displaying the sprites.
+        """
+        minimap_sprite = np.zeros((9, 10), dtype=np.int16)
+        sprites = self._ram_helper._sprites_on_screen()
+        for idx, s in enumerate(sprites):
+            if (idx + 1) % 4 != 0:
+                continue
+            minimap_sprite[s.y // 16, s.x // 16] = (s.tiles[0].tile_identifier + 1) / 4
+
+        if self.map == Map.VERMILION_GYM and self.event_flags[EventFlag.EVENT_2ND_LOCK_OPENED] == 0:
+            trashcans_coords = [
+                (1, 7), (1, 9), (1, 11),
+                (3, 7), (3, 9), (3, 11),
+                (5, 7), (5, 9), (5, 11),
+                (7, 7), (7, 9), (7, 11),
+                (9, 7), (9, 9), (9, 11),
+            ]
+            can = self._read(RamLocation.SECOND_LOCK_TRASH_CAN) \
+                if (self.event_flags[EventFlag.EVENT_1ST_LOCK_OPENED] == 1) \
+                else self._read(RamLocation.FIRST_LOCK_TRASH_CAN)
+            assign_new_sprite_in_sprite_minimap(minimap_sprite, 384, *trashcans_coords[can])
+
+        elif self.map in switch_coords:
+            for coords in switch_coords[self.map]:
+                assign_new_sprite_in_sprite_minimap(minimap_sprite, 383, *coords)
+
+    @cproperty
+    def feature_maps(self) -> np.ndarray:
+        """
+        A set of map features compiled in one image.
+        """
+        # TODO: seen map: dict of maps
+        explored_tiles = defaultdict(
+            lambda : defaultdict(int)
+        )
+
+        # TODO: do we post process by normalising ?
+        explored_tiles[self.map][(self.pos_x, self.pos_y)] = self.frame
+
+        ledges_dict = {
+            'down': [54, 55],
+            'left': 39,
+            'right': [13, 29]
+        }
+        minimap = np.zeros((6, 9, 10), dtype=np.float32)
+        bottom_left_screen_tiles = self.bottom_left_screen_tiles
+        # walkable
+        minimap[0] = self._ram_helper._get_screen_walkable_matrix()
+
+        if self.tileset_id == TileSet.VERMILION_PORT:
+            minimap[5] = (bottom_left_screen_tiles == 20).astype(np.float32)
+        elif self.tileset_id in [TileSet.OVERWORLD, TileSet.FOREST, TileSet.TILESET_5, TileSet.GYM, TileSet.TILESET_13,
+                                 TileSet.TILESET_17, TileSet.TILESET_22, TileSet.TILESET_23]:
+            # What is this ? water ?
+            minimap[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.float32)
+
+        if self.tileset_id == TileSet.OVERWORLD:  # is overworld
+            # tree
+            minimap[1] = (bottom_left_screen_tiles == 61).astype(np.float32)
+            # ledge down
+            minimap[2] = np.isin(bottom_left_screen_tiles, ledges_dict['down']).astype(np.float32)
+            # ledge left
+            minimap[3] = (bottom_left_screen_tiles == ledges_dict['left']).astype(np.float32)
+            # ledge right
+            minimap[4] = np.isin(bottom_left_screen_tiles, ledges_dict['right']).astype(np.float32)
+        elif self.tileset_id == TileSet.GYM:
+            # tree
+            minimap[1] = (bottom_left_screen_tiles == 80).astype(np.float32)  # 0x50
+
+        # get seen_map obs
+        seen_map_obs = self.get_all_seen_map_obs()  # (8, 9, 10)
+
+        minimap = np.concatenate([minimap, seen_map_obs], axis=0)  # (14, 9, 10)
+        self._minimap_obs = minimap
+        return self._minimap_obs
+
+
+switch_coords = {
+    Map.POKEMON_MANSION_1F: [(2, 5)],
+    Map.POKEMON_MANSION_2F: [(2, 11)],
+    Map.POKEMON_MANSION_3F: [(10, 5)],
+    Map.POKEMON_MANSION_B1F: [(20, 3), (18, 25)],
+
+}
+def assign_new_sprite_in_sprite_minimap(
+        minimap,
+        sprite_id,
+        x, y
+):
+    top_left_x = x - 4
+    top_left_y = y - 4
+    if x >= top_left_x and x < top_left_x + 10 and y >= top_left_y and y < top_left_y + 9:
+        minimap[y - top_left_y, x - top_left_x] = sprite_id

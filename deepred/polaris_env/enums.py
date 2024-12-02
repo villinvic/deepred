@@ -1,16 +1,20 @@
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Union
 
 
-class RamLocation(int, Enum):
 
+
+class RamLocation(IntEnum):
+
+    PARTY_START = 0xD16B
+    PARTY_NICKNAMES_START = 0xD2B5
     MONEY3 = 0xD347
     MONEY2 = 0xD348
     MONEY1 = 0xD349
     MAP_ID = 0xD35E
     POS_Y = 0xD361
     POS_X = 0xD362
-    PARTY_0_ID = 0xD164
+    PARTY_0_ID = 0xD164 # PARTY_SPECIES_START
     PARTY_1_ID = 0xD165
     PARTY_2_ID = 0xD166
     PARTY_3_ID = 0xD167
@@ -54,25 +58,108 @@ class RamLocation(int, Enum):
     ITEM_CURSOR_Y = 0xCC24
     ITEM_CURSOR_X = 0xCC25
     MENU_ITEM_ID = 0xCC26
-    DIALOG_STATE = 0xCC51 # Unsure ? # goes to 113 when in start menu (8 when in red's bedroom???)
+    OPEN_START_MENU = 0xD017 # Modded to be 0 and 1 when the menu is off/on. Was unused.
     OPEN_TEXT_BOX = 0xCFC4 # Unsure if it is only related to textboxes
-    OPEN_TOWN_MAP = 0xCFCB
+    TOWN_MAP_STATE = 0x4E3E # Equals to 205 when opening town map #0xCFCB
     ORIENTATION = 0xC109
     BAG_ITEMS_START = 0xD31E
     BAG_ITEMS_END = 0xD347
-
+    PARTY_MENU_MESSAGE_POINTERS = 0x6e89
     # Game events
     # TODO: we can curate the events and only care about the most relevant ones. By default, we have 502 events.
     EVENT_START = 0xD747
     EVENT_END = 0xD86F
 
-    def __add__(self, other: Union["RamLocation", int]):
-        if isinstance(other, int):
-            return self.value + other
-        return self.value + other.value
+    INSTANT_TEXT = 0xD730 # wd730
+    MENU_STATE = 0xFFB0 # hWY
+
+    BOX_POKEMON_COUNT = 0xDA80
+    BOX_POKEMON_START = 0xDA96
+    BOX_SPECIES_START = 0xDA81
+    BOX_NICKNAMES_START = 0xDE06
+
+    SAFARI_STEPS = 0xD70D
+    SIMULATED_JOYPAD_INDEX = 0xCD38
+    WARP_ENTRIES = 0xD3AF
+    TILESET = 0xD367
+    HDST_MAP = 0xFF8B
+    NUM_WARPS = 0xd3AE
+    WD736 = 0xD736
+    STANDING_ON_WARP_HOLE = 0xCD5B
+
+    FIRST_LOCK_TRASH_CAN = 0xD743
+    SECOND_LOCK_TRASH_CAN = 0xD744
+
+    # def __add__(self, other: Union[Enum, int]):
+    #     if isinstance(other, int):
+    #         return self.value + other
+    #     return self.value + other.value
 
 
-class StartMenuItem(Enum):
+class DataStructDimension(IntEnum):
+
+    POKEMON_STATS = 44
+    POKEMON_NICKNAME = 11
+    WARP = 4
+    
+    
+class TileSet(IntEnum):
+    """
+            if tileset_id in [0, 3, 5, 7, 13, 14, 17, 22, 23]:  # 0 overworld, 3 forest,
+            # water
+            if tileset_id == 14:  # vermilion port
+                minimap[5] = (bottom_left_screen_tiles == 20).astype(np.float32)
+            else:
+                minimap[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.float32)
+
+        if tileset_id == 0:  # is overworld
+            # tree
+            minimap[1] = (bottom_left_screen_tiles == 61).astype(np.float32)
+            # ledge down
+            minimap[2] = np.isin(bottom_left_screen_tiles, ledges_dict['down']).astype(np.float32)
+            # ledge left
+            minimap[3] = (bottom_left_screen_tiles == ledges_dict['left']).astype(np.float32)
+            # ledge right
+            minimap[4] = np.isin(bottom_left_screen_tiles, ledges_dict['right']).astype(np.float32)
+        elif tileset_id == 7:  # is gym
+            # tree
+            minimap[1] = (bottom_left_screen_tiles == 80).astype(np.float32)  # 0x50
+
+        # get seen_map obs
+        seen_map_obs = self.get_all_seen_map_obs()  # (8, 9, 10)
+
+        minimap = np.concatenate([minimap, seen_map_obs], axis=0)  # (14, 9, 10)
+        self._minimap_obs = minimap
+        return self._minimap_obs
+    """
+    OVERWORLD            = 0
+    TILESET_1            = 1
+    TILESET_2            = 2
+    FOREST               = 3
+    TILESET_4            = 4
+    TILESET_5            = 5
+    TILESET_6            = 6
+    GYM                  = 7
+    TILESET_8            = 8
+    TILESET_9            = 9
+    TILESET_10           = 10
+    TILESET_11           = 11
+    TILESET_12           = 12
+    TILESET_13           = 13
+    VERMILION_PORT       = 14
+    TILESET_15           = 15
+    TILESET_16           = 16
+    TILESET_17           = 17
+    TILESET_18           = 18
+    TILESET_19           = 19
+    TILESET_20           = 20
+    TILESET_21           = 21
+    TILESET_22           = 22
+    TILESET_23           = 23
+
+
+
+class StartMenuItem(IntEnum):
     POKEDEX = 0
     POKEMON = 1
     ITEM = 2
@@ -82,7 +169,7 @@ class StartMenuItem(Enum):
     EXIT = 6
     UNSELECTED = 7
 
-class BagItem(Enum):
+class BagItem(IntEnum):
     # Stored in [0xD31E, 0xD346]
     NO_ITEM = 0x00
     MASTER_BALL = 0x01
@@ -184,8 +271,63 @@ class BagItem(Enum):
     FLOOR_10F = 0x5F
     FLOOR_11F = 0x60
     FLOOR_B4F = 0x61
-    
-class Pokemon(Enum):
+    HM_CUT = 0xC4
+    HM_FLY = 0xC5
+    HM_SURF = 0xC6
+    HM_STRENGTH = 0xC7
+    HM_FLASH = 0xC8
+    HM_MEGA_PUNCH       = 0xC9
+    HM_RAZOR_WIND       = 0xCA
+    HM_SWORDS_DANCE     = 0xCB
+    HM_WHIRLWIND        = 0xCC
+    HM_MEGA_KICK        = 0xCD
+    HM_TOXIC            = 0xCE
+    HM_HORN_DRILL       = 0xCF
+    HM_BODY_SLAM        = 0xD0
+    HM_TAKE_DOWN        = 0xD1
+    HM_DOUBLE_EDGE      = 0xD2
+    HM_BUBBLEBEAM       = 0xD3
+    HM_WATER_GUN        = 0xD4
+    HM_ICE_BEAM         = 0xD5
+    HM_BLIZZARD         = 0xD6
+    HM_HYPER_BEAM       = 0xD7
+    HM_PAY_DAY          = 0xD8
+    HM_SUBMISSION       = 0xD9
+    HM_COUNTER          = 0xDA
+    HM_SEISMIC_TOSS     = 0xDB
+    HM_RAGE             = 0xDC
+    HM_MEGA_DRAIN       = 0xDD
+    HM_SOLARBEAM        = 0xDE
+    HM_DRAGON_RAGE      = 0xDF
+    HM_THUNDERBOLT      = 0xE0
+    HM_THUNDER          = 0xE1
+    HM_EARTHQUAKE       = 0xE2
+    HM_FISSURE          = 0xE3
+    HM_DIG              = 0xE4
+    HM_PSYCHIC_M        = 0xE5
+    HM_TELEPORT         = 0xE6
+    HM_MIMIC            = 0xE7
+    HM_DOUBLE_TEAM      = 0xE8
+    HM_REFLECT          = 0xE9
+    HM_BIDE             = 0xEA
+    HM_METRONOME        = 0xEB
+    HM_SELFDESTRUCT     = 0xEC
+    HM_EGG_BOMB         = 0xED
+    HM_FIRE_BLAST       = 0xEE
+    HM_SWIFT            = 0xEF
+    HM_SKULL_BASH       = 0xF0
+    HM_SOFTBOILED       = 0xF1
+    HM_DREAM_EATER      = 0xF2
+    HM_SKY_ATTACK       = 0xF3
+    HM_REST             = 0xF4
+    HM_THUNDER_WAVE     = 0xF5
+    HM_PSYWAVE          = 0xF6
+    HM_EXPLOSION        = 0xF7
+    HM_ROCK_SLIDE       = 0xF8
+    HM_TRI_ATTACK       = 0xF9
+    HM_SUBSTITUTE       = 0xFA
+
+class Pokemon(IntEnum):
     M_GLITCH = 0x0
     RHYDON = 0x1
     KANGASKHAN = 0x2
@@ -377,271 +519,255 @@ class Pokemon(Enum):
     VICTREEBEL = 0xBE
     NONE = 0xFF
 
-
-class GameObs:
-
-    MAP_ID = "map_id"
-    MAPS_VISITED = "maps_visited"
-    BLACKOUT = "blackout"
-    BADGES = "badges"
-    BADGE_SUM = "badge_sum"
-    MONEY = "money"
-    COORDINATES = "coordinates"
-    PARTY_EXPERIENCE = "party_experience"
-    TOTAL_EXPERIENCE = "total_experience"
-    TOTAL_BLACKOUT = "total_blackouts"
-    PARTY_LEVELS = "party_levels"
-    TOTAL_LEVELS = "total_levels"
-    PARTY_HEALTH = "party_health"
-    PARTY_FILLS = "party_fills"
-    SEEN_POKEMONS = "seen_pokemons"
-    CAUGHT_POKEMONS = "caught_pokemons"
-    EVENTS_TRIGGERED = "events_triggered"
-    TOTAL_EVENTS_TRIGGERED = "total_events_triggered"
-    ORIENTATION = "orientation"
-    SURROUNDING_TILES_VISITATION = "surrounding_tiles_visitation"
-    NOVELTY_COUNT = "novelty_count"
-    LEVEL_FRAQ = "level_fraq"
-    ENTRANCE_DELTA_POS = "entrance_delta_pos"
-    SENT_OUT = "sent_out"
-    GOAL_TASK = "goal_task"
-    IN_BATTLE = "in_battle"
-    ITEMS = "items"
-    NUM_BALLS = "num_balls"
-    NUM_HEALING_ITEMS = "num_healing_items"
-    NUM_BALLS_USED = "num_balls_used"
-    NUM_HEALING_ITEMS_USED = "num_healing_items_used"
-    NUM_BALLS_BOUGHT = "num_balls_bought"
-    NUM_HEALING_ITEMS_BOUGHT = "num_healing_items_bought"
-
-
-class Map(Enum):
-    PALLET_TOWN = 0x0
-    VIRIDIAN_CITY = 0x1
-    PEWTER_CITY = 0x2
-    CERULEAN_CITY = 0x3
-    LAVENDER_TOWN = 0x4
-    VERMILION_CITY = 0x5
-    CELADON_CITY = 0x6
-    FUCHSIA_CITY = 0x7
-    CINNABAR_ISLAND = 0x8
-    POKEMON_LEAGUE = 0x9
-    SAFFRON_CITY = 0xA
-    UNUSED_FLY_LOCATION = 0xB
-    ROUTE_1 = 0xC
-    ROUTE_2 = 0xD
-    ROUTE_3 = 0xE
-    ROUTE_4 = 0xF
-    ROUTE_5 = 0x10
-    ROUTE_6 = 0x11
-    ROUTE_7 = 0x12
-    ROUTE_8 = 0x13
-    ROUTE_9 = 0x14
-    ROUTE_10 = 0x15
-    ROUTE_11 = 0x16
-    ROUTE_12 = 0x17
-    ROUTE_13 = 0x18
-    ROUTE_14 = 0x19
-    ROUTE_15 = 0x1A
-    ROUTE_16 = 0x1B
-    ROUTE_17 = 0x1C
-    ROUTE_18 = 0x1D
-    SEA_ROUTE_19 = 0x1E
-    SEA_ROUTE_20 = 0x1F
-    SEA_ROUTE_21 = 0x20
-    ROUTE_22 = 0x21
-    ROUTE_23 = 0x22
-    ROUTE_24 = 0x23
-    ROUTE_25 = 0x24
-    REDS_HOUSE_FIRST_FLOOR = 0x25
-    REDS_HOUSE_SECOND_FLOOR = 0x26
-    BLUES_HOUSE = 0x27
-    PROFESSOR_OAKS_LAB = 0x28
-    POKEMON_CENTER_VIRIDIAN_CITY = 0x29
-    POKE_MART_VIRIDIAN_CITY = 0x2A
-    SCHOOL_VIRIDIAN_CITY = 0x2B
-    HOUSE_1_VIRIDIAN_CITY = 0x2C
-    GYM_VIRIDIAN_CITY = 0x2D
-    DIGLETTS_CAVE_ROUTE_2_ENTRANCE = 0x2E
-    GATE_VIRIDIAN_CITY_PEWTER_CITY_ROUTE_2 = 0x2F
-    OAKS_AIDE_HOUSE_1_ROUTE_2 = 0x30
-    GATE_ROUTE_2 = 0x31
-    GATE_ROUTE_2_VIRIDIAN_FOREST_ROUTE_2 = 0x32
-    VIRIDIAN_FOREST = 0x33
-    PEWTER_MUSEUM_FLOOR_1 = 0x34
-    PEWTER_MUSEUM_FLOOR_2 = 0x35
-    GYM_PEWTER_CITY = 0x36
-    HOUSE_WITH_DISOBEDIENT_NIDORANM_PEWTER_CITY = 0x37
-    POKE_MART_PEWTER_CITY = 0x38
-    HOUSE_WITH_TWO_TRAINERS_PEWTER_CITY = 0x39
-    POKEMON_CENTER_PEWTER_CITY = 0x3A
-    MT_MOON_ROUTE_3_ENTRANCE = 0x3B
-    MT_MOON = 0x3D
-    INVADED_HOUSE_CERULEAN_CITY = 0x3E
-    POLIWHIRL_FOR_JYNX_TRADE_HOUSE_RED_BLUE = 0x3F
-    POKEMON_CENTER_CERULEAN_CITY = 0x40
-    GYM_CERULEAN_CITY = 0x41
-    BIKE_SHOP_CERULEAN_CITY = 0x42
-    POKE_MART_CERULEAN_CITY = 0x43
-    POKEMON_CENTER_ROUTE_4 = 0x44
-    INVADED_HOUSE__ALTERNATIVE_MUSIC_CERULEAN_CITY = 0x45
-    SAFFRON_CITY_GATE_ROUTE_5 = 0x46
-    ENTRANCE_TO_UNDERGROUND_PATH_ROUTE_5 = 0x47
-    DAYCARE_CENTER_ROUTE_5 = 0x48
-    SAFFRON_CITY_GATE_ROUTE_6 = 0x49
-    ENTRANCE_TO_UNDERGROUND_PATH_ROUTE_6 = 0x4A
-    ENTRANCE_TO_UNDERGROUND_PATH_ALTERNATIVE_MUSIC_ROUTE_6 = 0x4B
-    SAFFRON_CITY_GATE_ROUTE_7 = 0x4C
-    ENTRANCE_TO_UNDERGROUND_PATH_ROUTE_7 = 0x4D
-    ENTRANCE_TO_UNDERGROUND_PATH_UNUSED_ROUTE_7 = 0x4E
-    SAFFRON_CITY_GATE_ROUTE_8 = 0x4F
-    ENTRANCE_TO_UNDERGROUND_PATH_ROUTE_8 = 0x50
-    POKEMON_CENTER_ROCK_TUNNEL = 0x51
-    ROCK_TUNNEL = 0xE8
-    POWER_PLANT = 0x53
-    GATE_1F_ROUTE_11ROUTE_12 = 0x54
-    DIGLETTS_CAVE_VERMILION_CITY_ENTRANCE = 0x55
-    GATE_2F_ROUTE_11ROUTE_12 = 0x56
-    GATE_ROUTE_12ROUTE_13 = 0x57
-    SEA_COTTAGE = 0x58
-    POKEMON_CENTER_VERMILION_CITY = 0x59
-    POKEMON_FAN_CLUB_VERMILION_CITY = 0x5A
-    POKE_MART_VERMILION_CITY = 0x5B
-    GYM_VERMILION_CITY = 0x5C
-    HOUSE_WITH_PIDGEY_VERMILION_CITY = 0x5D
-    VERMILION_HARBOR_VERMILION_CITY = 0x5E
-    SS_ANNE_1F = 0x5F
-    SS_ANNE_2F = 0x60
-    SS_ANNE_3F = 0x61
-    SS_ANNE_B1F = 0x62
-    SS_ANNE_DECK = 0x63
-    SS_ANNE_KITCHEN = 0x64
-    SS_ANNE_CAPTAINS_ROOM = 0x65
-    SS_ANNE_1F_GENTLEMANS_ROOM = 0x66
-    SS_ANNE_2F_GENTLEMANS_ROOM = 0x67
-    SS_ANNE_B1F_SAILOR_FISHERMANS_ROOM = 0x68
-    UNUSED_VICTORY_ROAD = 0x6B
-    VICTORY_ROAD_ROUTE_23_ENTRANCE = 0x6C
-    UNUSED_POKEMON_LEAGUE = 0x75
-    LANCES_ELITE_FOUR_ROOM = 0x71
-    HALL_OF_FAME = 0x76
-    UNDERGROUND_PATH_ROUTE_5ROUTE_6 = 0x77
-    BLUE_CHAMPIONS_ROOM = 0x78
-    UNDERGROUND_PATH_ROUTE_7ROUTE_8 = 0x79
-    CELADON_DEPARTMENT_STORE_1F = 0x7A
-    CELADON_DEPARTMENT_STORE_2F = 0x7B
-    CELADON_DEPARTMENT_STORE_3F = 0x7C
-    CELADON_DEPARTMENT_STORE_4F = 0x7D
-    CELADON_DEPARTMENT_STORE_ROOFTOP_SQUARE = 0x7E
-    CELADON_DEPARTMENT_STORE_LIFT = 0x7F
-    CELADON_MANSION_1F = 0x80
-    CELADON_MANSION_2F = 0x81
-    CELADON_MANSION_3F = 0x82
-    CELADON_MANSION_4F = 0x83
-    CELADON_MANSION_4F_EEVEE_BUILDING = 0x84
-    POKEMON_CENTER_CELADON_CITY = 0x85
-    GYM_CELADON_CITY = 0x86
-    ROCKET_GAME_CORNER_CELADON_CITY = 0x87
-    CELADON_DEPARTMENT_STORE_5F = 0x88
-    PRIZE_CORNER_CELADON_CITY = 0x89
-    RESTAURANT_CELADON_CITY = 0x8A
-    HOUSE_WITH_TEAM_ROCKET_MEMBERS_CELADON_CITY = 0x8B
-    HOTEL_CELADON_CITY = 0x8C
-    POKEMON_CENTER_LAVENDER_TOWN = 0x8D
-    POKEMON_TOWER_1F = 0x8E
-    POKEMON_TOWER_2F = 0x8F
-    POKEMON_TOWER_3F = 0x90
-    POKEMON_TOWER_4F = 0x91
-    POKEMON_TOWER_5F = 0x92
-    POKEMON_TOWER_6F = 0x93
-    POKEMON_TOWER_7F = 0x94
-    MR_FUJIS_HOUSE_LAVENDER_TOWN = 0x95
-    POKE_MART_LAVENDER_TOWN = 0x96
-    HOUSE_WITH_NPC_DISCUSSING_CUBONES_MOTHER = 0x97
-    POKE_MART_FUCHSIA_CITY = 0x98
-    HOUSE_WITH_NPCS_DISCUSSING_BILL_FUCHSIA_CITY = 0x99
-    POKEMON_CENTER_FUCHSIA_CITY = 0x9A
-    WARDENS_HOUSE_FUCHSIA_CITY = 0x9B
-    SAFARI_ZONE_GATE_FUCHSIA_CITY = 0x9C
-    GYM_FUCHSIA_CITY = 0x9D
-    HOUSE_WITH_NPCS_DISCUSSING_BAOBA_FUCHSIA_CITY = 0X9E
-    SEAFOAM_ISLANDS = 0XC0
-    VERMILION_CITY_FISHING_BROTHER = 0XA3
-    FUCHSIA_CITY_FISHING_BROTHER = 0XA4
-    POKEMON_MANSION_1F = 0XA5
-    GYM_CINNABAR_ISLAND = 0XA6
-    POKEMON_LAB_CINNABAR_ISLAND = 0XA7
-    POKEMON_LAB__TRADE_ROOM_CINNABAR_ISLAND = 0XA8
-    POKEMON_LAB__ROOM_WITH_SCIENTISTS_CINNABAR_ISLAND = 0XA9
-    POKEMON_LAB__FOSSIL_RESURRECTION_ROOM_CINNABAR_ISLAND = 0XAA
-    POKEMON_CENTER_CINNABAR_ISLAND = 0XAB
-    POKE_MART_CINNABAR_ISLAND = 0XAC
-    POKE_MART__ALTERNATIVE_MUSIC_CINNABAR_ISLAND = 0XAD
-    POKEMON_CENTER_INDIGO_PLATEAU = 0XAE
-    COPYCATS_HOUSE_1F_SAFFRON_CITY = 0XAF
-    COPYCATS_HOUSE_2F_SAFFRON_CITY = 0XB0
-    FIGHTING_DOJO_SAFFRON_CITY = 0XB1
-    GYM_SAFFRON_CITY = 0XB2
-    HOUSE_WITH_PIDGEY_SAFFRON_CITY = 0XB3
-    POKE_MART_SAFFRON_CITY = 0XB4
-    SILPH_CO_1F = 0XB5
-    POKEMON_CENTER_SAFFRON_CITY = 0XB6
-    MR_PSYCHICS_HOUSE_SAFFRON_CITY = 0XB7
-    GATE_1F_ROUTE_15 = 0XB8
-    GATE_2F_ROUTE_15 = 0XB9
-    GATE_1F_CYCLING_ROAD_ROUTE_16 = 0XBA
-    GATE_2F_CYCLING_ROAD_ROUTE_16 = 0XBB
-    SECRET_HOUSE_CYCLING_ROAD_ROUTE_16 = 0XBC
-    ROUTE_12_FISHING_BROTHER = 0XBD
-    GATE_1F_ROUTE_18 = 0XBE
-    GATE_2F_ROUTE_18 = 0XBF
-    BADGES_CHECK_GATE_ROUTE_22 = 0XC1
-    VICTORY_ROAD = 0XC6
-    GATE_2F_ROUTE_12 = 0XC3
-    HOUSE_WITH_NPC_AND_HM_MOVES_ADVICE_VERMILION_CITY = 0XC4
-    DIGLETTS_CAVE = 0XC5
-    TEAM_ROCKET_HIDEOUT_B1F = 0XC7
-    TEAM_ROCKET_HIDEOUT_B2F = 0XC8
-    TEAM_ROCKET_HIDEOUT_B3F = 0XC9
-    TEAM_ROCKET_HIDEOUT_B4F = 0XCA
-    TEAM_ROCKET_HIDEOUT_LIFT = 0XCB
-    UNUSED_TEAM_ROCKET_HIDEOUT = 0XCE
-    SILPH_CO_2F = 0XCF
-    SILPH_CO_3F = 0XD0
-    SILPH_CO_4F = 0XD1
-    SILPH_CO_5F = 0XD2
-    SILPH_CO_6F = 0XD3
-    SILPH_CO_7F = 0XD4
-    SILPH_CO_8F = 0XD5
-    POKEMON_MANSION_2F = 0XD6
-    POKEMON_MANSION_3F = 0XD7
-    POKEMON_MANSION_B1F = 0XD8
-    SAFARI_ZONE_AREA_1 = 0XD9
-    SAFARI_ZONE_AREA_2 = 0XDA
-    SAFARI_ZONE_AREA_3 = 0XDB
-    SAFARI_ZONE_ENTRANCE = 0XDC
-    SAFARI_ZONE_REST_HOUSE_1 = 0XDD
-    SAFARI_ZONE_PRIZE_HOUSE = 0XDE
-    SAFARI_ZONE_REST_HOUSE_2 = 0XDF
-    SAFARI_ZONE_REST_HOUSE_3 = 0XE0
-    SAFARI_ZONE_REST_HOUSE_4 = 0XE1
-    CERULEAN_CAVE = 0XE2
-    CERULEAN_CAVE_1F = 0XE3
-    CERULEAN_CAVE_B1F = 0XE4
-    NAME_RATERS_HOUSE_LAVENDER_TOWN = 0XE5
-    CERULEAN_CITY_GYM_BADGE_MAN = 0XE6
-    UNUSED_ROCK_TUNNEL = 0XE7
-    SILPH_CO_9F = 0XE9
-    SILPH_CO_10F = 0XEA
-    SILPH_CO_11F = 0XEB
-    SILPH_CO_LIFT = 0XEC
-    INVALID = 0XF4
-    CABLE_CLUB_TRADE_CENTER = 0XEF
-    CABLE_CLUB_COLOSSEUM = 0XF0
-    LORELEIS_ROOM = 0XF5
-    BRUNOS_ROOM = 0XF6
-    AGATHAS_ROOM = 0XF7
-
+class Map(IntEnum):
+    PALLET_TOWN                   = 0x00
+    VIRIDIAN_CITY                 = 0x01
+    PEWTER_CITY                   = 0x02
+    CERULEAN_CITY                 = 0x03
+    LAVENDER_TOWN                 = 0x04
+    VERMILION_CITY                = 0x05
+    CELADON_CITY                  = 0x06
+    FUCHSIA_CITY                  = 0x07
+    CINNABAR_ISLAND               = 0x08
+    INDIGO_PLATEAU                = 0x09
+    SAFFRON_CITY                  = 0x0A
+    UNUSED_MAP_0B                 = 0x0B
+    ROUTE_1                       = 0x0C
+    ROUTE_2                       = 0x0D
+    ROUTE_3                       = 0x0E
+    ROUTE_4                       = 0x0F
+    ROUTE_5                       = 0x10
+    ROUTE_6                       = 0x11
+    ROUTE_7                       = 0x12
+    ROUTE_8                       = 0x13
+    ROUTE_9                       = 0x14
+    ROUTE_10                      = 0x15
+    ROUTE_11                      = 0x16
+    ROUTE_12                      = 0x17
+    ROUTE_13                      = 0x18
+    ROUTE_14                      = 0x19
+    ROUTE_15                      = 0x1A
+    ROUTE_16                      = 0x1B
+    ROUTE_17                      = 0x1C
+    ROUTE_18                      = 0x1D
+    ROUTE_19                      = 0x1E
+    ROUTE_20                      = 0x1F
+    ROUTE_21                      = 0x20
+    ROUTE_22                      = 0x21
+    ROUTE_23                      = 0x22
+    ROUTE_24                      = 0x23
+    ROUTE_25                      = 0x24
+    REDS_HOUSE_1F                  = 0x25
+    REDS_HOUSE_2F                  = 0x26
+    BLUES_HOUSE                    = 0x27
+    OAKS_LAB                       = 0x28
+    VIRIDIAN_POKECENTER            = 0x29
+    VIRIDIAN_MART                  = 0x2A
+    VIRIDIAN_SCHOOL_HOUSE          = 0x2B
+    VIRIDIAN_NICKNAME_HOUSE        = 0x2C
+    VIRIDIAN_GYM                  = 0x2D
+    DIGLETTS_CAVE_ROUTE_2          = 0x2E
+    VIRIDIAN_FOREST_NORTH_GATE     = 0x2F
+    ROUTE_2_TRADE_HOUSE            = 0x30
+    ROUTE_2_GATE                   = 0x31
+    VIRIDIAN_FOREST_SOUTH_GATE     = 0x32
+    VIRIDIAN_FOREST               = 0x33
+    MUSEUM_1F                     = 0x34
+    MUSEUM_2F                      = 0x35
+    PEWTER_GYM                     = 0x36
+    PEWTER_NIDORAN_HOUSE           = 0x37
+    PEWTER_MART                    = 0x38
+    PEWTER_SPEECH_HOUSE            = 0x39
+    PEWTER_POKECENTER              = 0x3A
+    MT_MOON_1F                    = 0x3B
+    MT_MOON_B1F                   = 0x3C
+    MT_MOON_B2F                   = 0x3D
+    CERULEAN_TRASHED_HOUSE         = 0x3E
+    CERULEAN_TRADE_HOUSE           = 0x3F
+    CERULEAN_POKECENTER            = 0x40
+    CERULEAN_GYM                   = 0x41
+    BIKE_SHOP                      = 0x42
+    CERULEAN_MART                  = 0x43
+    MT_MOON_POKECENTER             = 0x44
+    CERULEAN_TRASHED_HOUSE_COPY    = 0x45
+    ROUTE_5_GATE                   = 0x46
+    UNDERGROUND_PATH_ROUTE_5       = 0x47
+    DAYCARE                        = 0x48
+    ROUTE_6_GATE                   = 0x49
+    UNDERGROUND_PATH_ROUTE_6       = 0x4A
+    UNDERGROUND_PATH_ROUTE_6_COPY  = 0x4B
+    ROUTE_7_GATE                   = 0x4C
+    UNDERGROUND_PATH_ROUTE_7       = 0x4D
+    UNDERGROUND_PATH_ROUTE_7_COPY  = 0x4E
+    ROUTE_8_GATE                   = 0x4F
+    UNDERGROUND_PATH_ROUTE_8       = 0x50
+    ROCK_TUNNEL_POKECENTER         = 0x51
+    ROCK_TUNNEL_1F                = 0x52
+    POWER_PLANT                   = 0x53
+    ROUTE_11_GATE_1F               = 0x54
+    DIGLETTS_CAVE_ROUTE_11         = 0x55
+    ROUTE_11_GATE_2F               = 0x56
+    ROUTE_12_GATE_1F               = 0x57
+    BILLS_HOUSE                    = 0x58
+    VERMILION_POKECENTER           = 0x59
+    POKEMON_FAN_CLUB               = 0x5A
+    VERMILION_MART                 = 0x5B
+    VERMILION_GYM                  = 0x5C
+    VERMILION_PIDGEY_HOUSE         = 0x5D
+    VERMILION_DOCK                = 0x5E
+    SS_ANNE_1F                    = 0x5F
+    SS_ANNE_2F                    = 0x60
+    SS_ANNE_3F                    = 0x61
+    SS_ANNE_B1F                   = 0x62
+    SS_ANNE_BOW                   = 0x63
+    SS_ANNE_KITCHEN                = 0x64
+    SS_ANNE_CAPTAINS_ROOM          = 0x65
+    SS_ANNE_1F_ROOMS              = 0x66
+    SS_ANNE_2F_ROOMS              = 0x67
+    SS_ANNE_B1F_ROOMS             = 0x68
+    UNUSED_MAP_69                  = 0x69
+    UNUSED_MAP_6A                  = 0x6A
+    UNUSED_MAP_6B                  = 0x6B
+    VICTORY_ROAD_1F               = 0x6C
+    UNUSED_MAP_6D                  = 0x6D
+    UNUSED_MAP_6E                  = 0x6E
+    UNUSED_MAP_6F                  = 0x6F
+    UNUSED_MAP_70                  = 0x70
+    LANCES_ROOM                   = 0x71
+    UNUSED_MAP_72                  = 0x72
+    UNUSED_MAP_73                  = 0x73
+    UNUSED_MAP_74                  = 0x74
+    UNUSED_MAP_75                  = 0x75
+    HALL_OF_FAME                   = 0x76
+    UNDERGROUND_PATH_NORTH_SOUTH   = 0x77
+    CHAMPIONS_ROOM                 = 0x78
+    UNDERGROUND_PATH_WEST_EAST    = 0x79
+    CELADON_MART_1F               = 0x7A
+    CELADON_MART_2F               = 0x7B
+    CELADON_MART_3F               = 0x7C
+    CELADON_MART_4F               = 0x7D
+    CELADON_MART_ROOF             = 0x7E
+    CELADON_MART_ELEVATOR          = 0x7F
+    CELADON_MANSION_1F             = 0x80
+    CELADON_MANSION_2F             = 0x81
+    CELADON_MANSION_3F             = 0x82
+    CELADON_MANSION_ROOF           = 0x83
+    CELADON_MANSION_ROOF_HOUSE     = 0x84
+    CELADON_POKECENTER             = 0x85
+    CELADON_GYM                    = 0x86
+    GAME_CORNER                   = 0x87
+    CELADON_MART_5F               = 0x88
+    GAME_CORNER_PRIZE_ROOM         = 0x89
+    CELADON_DINER                  = 0x8A
+    CELADON_CHIEF_HOUSE            = 0x8B
+    CELADON_HOTEL                  = 0x8C
+    LAVENDER_POKECENTER            = 0x8D
+    POKEMON_TOWER_1F              = 0x8E
+    POKEMON_TOWER_2F              = 0x8F
+    POKEMON_TOWER_3F              = 0x90
+    POKEMON_TOWER_4F              = 0x91
+    POKEMON_TOWER_5F              = 0x92
+    POKEMON_TOWER_6F              = 0x93
+    POKEMON_TOWER_7F              = 0x94
+    MR_FUJIS_HOUSE                 = 0x95
+    LAVENDER_MART                  = 0x96
+    LAVENDER_CUBONE_HOUSE          = 0x97
+    FUCHSIA_MART                   = 0x98
+    FUCHSIA_BILLS_GRANDPAS_HOUSE   = 0x99
+    FUCHSIA_POKECENTER             = 0x9A
+    WARDENS_HOUSE                  = 0x9B
+    SAFARI_ZONE_GATE               = 0x9C
+    FUCHSIA_GYM                    = 0x9D
+    FUCHSIA_MEETING_ROOM           = 0x9E
+    SEAFOAM_ISLANDS_B1F           = 0x9F
+    SEAFOAM_ISLANDS_B2F           = 0xA0
+    SEAFOAM_ISLANDS_B3F           = 0xA1
+    SEAFOAM_ISLANDS_B4F           = 0xA2
+    VERMILION_OLD_ROD_HOUSE        = 0xA3
+    FUCHSIA_GOOD_ROD_HOUSE         = 0xA4
+    POKEMON_MANSION_1F            = 0xA5
+    CINNABAR_GYM                  = 0xA6
+    CINNABAR_LAB                   = 0xA7
+    CINNABAR_LAB_TRADE_ROOM        = 0xA8
+    CINNABAR_LAB_METRONOME_ROOM    = 0xA9
+    CINNABAR_LAB_FOSSIL_ROOM       = 0xAA
+    CINNABAR_POKECENTER            = 0xAB
+    CINNABAR_MART                  = 0xAC
+    CINNABAR_MART_COPY             = 0xAD
+    INDIGO_PLATEAU_LOBBY           = 0xAE
+    COPYCATS_HOUSE_1F              = 0xAF
+    COPYCATS_HOUSE_2F              = 0xB0
+    FIGHTING_DOJO                  = 0xB1
+    SAFFRON_GYM                   = 0xB2
+    SAFFRON_PIDGEY_HOUSE           = 0xB3
+    SAFFRON_MART                   = 0xB4
+    SILPH_CO_1F                   = 0xB5
+    SAFFRON_POKECENTER             = 0xB6
+    MR_PSYCHICS_HOUSE              = 0xB7
+    ROUTE_15_GATE_1F               = 0xB8
+    ROUTE_15_GATE_2F               = 0xB9
+    ROUTE_16_GATE_1F               = 0xBA
+    ROUTE_16_GATE_2F               = 0xBB
+    ROUTE_16_FLY_HOUSE             = 0xBC
+    ROUTE_12_SUPER_ROD_HOUSE       = 0xBD
+    ROUTE_18_GATE_1F               = 0xBE
+    ROUTE_18_GATE_2F               = 0xBF
+    SEAFOAM_ISLANDS_1F            = 0xC0
+    ROUTE_22_GATE                  = 0xC1
+    VICTORY_ROAD_2F               = 0xC2
+    ROUTE_12_GATE_2F               = 0xC3
+    VERMILION_TRADE_HOUSE          = 0xC4
+    DIGLETTS_CAVE                 = 0xC5
+    VICTORY_ROAD_3F               = 0xC6
+    ROCKET_HIDEOUT_B1F            = 0xC7
+    ROCKET_HIDEOUT_B2F            = 0xC8
+    ROCKET_HIDEOUT_B3F            = 0xC9
+    ROCKET_HIDEOUT_B4F            = 0xCA
+    ROCKET_HIDEOUT_ELEVATOR        = 0xCB
+    UNUSED_MAP_CC                  = 0xCC
+    UNUSED_MAP_CD                  = 0xCD
+    UNUSED_MAP_CE                  = 0xCE
+    SILPH_CO_2F                   = 0xCF
+    SILPH_CO_3F                   = 0xD0
+    SILPH_CO_4F                   = 0xD1
+    SILPH_CO_5F                   = 0xD2
+    SILPH_CO_6F                   = 0xD3
+    SILPH_CO_7F                   = 0xD4
+    SILPH_CO_8F                   = 0xD5
+    POKEMON_MANSION_2F            = 0xD6
+    POKEMON_MANSION_3F            = 0xD7
+    POKEMON_MANSION_B1F           = 0xD8
+    SAFARI_ZONE_EAST              = 0xD9
+    SAFARI_ZONE_NORTH             = 0xDA
+    SAFARI_ZONE_WEST              = 0xDB
+    SAFARI_ZONE_CENTER            = 0xDC
+    SAFARI_ZONE_CENTER_REST_HOUSE  = 0xDD
+    SAFARI_ZONE_SECRET_HOUSE       = 0xDE
+    SAFARI_ZONE_WEST_REST_HOUSE    = 0xDF
+    SAFARI_ZONE_EAST_REST_HOUSE    = 0xE0
+    SAFARI_ZONE_NORTH_REST_HOUSE   = 0xE1
+    CERULEAN_CAVE_2F              = 0xE2
+    CERULEAN_CAVE_B1F             = 0xE3
+    CERULEAN_CAVE_1F              = 0xE4
+    NAME_RATERS_HOUSE              = 0xE5
+    CERULEAN_BADGE_HOUSE           = 0xE6
+    UNUSED_MAP_E7                  = 0xE7
+    ROCK_TUNNEL_B1F               = 0xE8
+    SILPH_CO_9F                   = 0xE9
+    SILPH_CO_10F                   = 0xEA
+    SILPH_CO_11F                   = 0xEB
+    SILPH_CO_ELEVATOR              = 0xEC
+    UNUSED_MAP_ED                  = 0xED
+    UNUSED_MAP_EE                  = 0xEE
+    TRADE_CENTER                   = 0xEF
+    COLOSSEUM                      = 0xF0
+    UNUSED_MAP_F1                  = 0xF1
+    UNUSED_MAP_F2                  = 0xF2
+    UNUSED_MAP_F3                  = 0xF3
+    UNUSED_MAP_F4                  = 0xF4
+    LORELEIS_ROOM                  = 0xF5
+    BRUNOS_ROOM                    = 0xF6
+    AGATHAS_ROOM                   = 0xF7
 
 class ProgressionEvents(Enum):
     # TODO: this should list the most important events to solve the game.

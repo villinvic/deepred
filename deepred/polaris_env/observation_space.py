@@ -1,14 +1,16 @@
 import abc
 from abc import abstractmethod
 from enum import Enum
+from pathlib import Path
 from typing import Callable, Any, Tuple, Union, List, Dict
 
 import cv2
 import numpy as np
 import tree
+from PIL import Image
 from gymnasium import spaces
 from gymnasium.spaces import Box
-from deepred.polaris_env.enums import Map, EventFlag, BagItem
+from deepred.polaris_env.enums import Map, EventFlag, BagItem, ProgressionEvents
 from deepred.polaris_env.gamestate import GameState
 
 
@@ -105,7 +107,7 @@ class RamObservation(Observation):
         if self.nature == ObsType.BINARY:
             input_array[self._offset: self._offset + self.size] = observed
         elif self.nature == ObsType.CATEGORICAL:
-                input_array[self._offset + self.size] = 0
+                input_array[self._offset : self._offset + self.size] = 0
                 input_array[self._offset + observed] = 1
         elif self.nature == ObsType.CONTINUOUS:
                 input_array[self._offset: self._offset + self.size] = np.clip(observed, *self.domain) * self.scale
@@ -134,9 +136,10 @@ class PixelsObservation(Observation):
         self.stacked_shape = (h, w)
 
         # needed if we use stack_oldest_only
-        self._pixel_history = np.zeros(
-            (h*framestack, w), dtype=np.uint8
-        )
+        if self.stack_oldest_only:
+            self._pixel_history = np.zeros(
+                (h*framestack, w), dtype=np.uint8
+            )
 
     def gym_spec(self) -> spaces.Box:
         return spaces.Box(low=0, high=255, shape=self.stacked_shape, dtype=np.uint8)
@@ -148,12 +151,14 @@ class PixelsObservation(Observation):
     ):
         pixels = self._extractor(gamestate)
         w, h = self.downscaled_shape
-        downscaled = cv2.resize(
-            pixels,
-            self.downscaled_shape,
-            interpolation=cv2.INTER_AREA,
-        )
-        # downscaled = pixels[:h, :w]
+        if pixels.shape == self.downscaled_shape:
+            downscaled = pixels
+        else:
+            downscaled = cv2.resize(
+                pixels,
+                self.downscaled_shape,
+                interpolation=cv2.INTER_AREA,
+            )
 
         if self.stack_oldest_only:
             # Here, we only stack the most recent pixels to the oldest one in the stack.
@@ -231,7 +236,7 @@ class PolarisRedObservationSpace:
                 domain=(0., 100.)
             ),
             in_battle=RamObservation(
-                extractor=lambda gamestate: gamestate.is_in_battle(),
+                extractor=lambda gamestate: gamestate.is_in_battle,
                 nature=ObsType.BINARY,
             ),
             sent_out=RamObservation(
@@ -249,12 +254,17 @@ class PolarisRedObservationSpace:
             event_flags=RamObservation(
                 extractor=lambda gamestate: gamestate.event_flags,
                 nature=ObsType.BINARY,
-                size=len(EventFlag),
+                size=len(ProgressionEvents),
             ),
             position=RamObservation(
                 extractor=lambda gamestate: [gamestate.pos_x, gamestate.pos_y],
                 nature=ObsType.CONTINUOUS,
                 size=2,
+            ),
+            map_id=RamObservation(
+                extractor=lambda gamestate: gamestate.map,
+                nature=ObsType.CATEGORICAL,
+                size=len(Map)
             )
         )
 
@@ -274,16 +284,34 @@ class PolarisRedObservationSpace:
         )
         pixel_observation.initialise()
 
-        observations = dict(
-            pixels=pixel_observation,
-            ram=ram_observations
+        minimap_observation = PixelsObservation(
+            extractor=lambda gamestate: gamestate.minimap
         )
 
-        self.inject = self._build_observation_op(observations)
+        self.observations = dict(
+            ram=ram_observations,
+            main_screen=pixel_observation,
+            minimap=minimap_observation,
+            minimap_sprite=minimap_sprite_observation,
+            minimap_warp=minimap_warp_observation,
+            map_ids=last_10_map_ids_observation,
+            map_step_since=last_10_map_step_since_observation,
+            item_ids=all_item_ids_observation,
+            item_quantity=items_quantity_observation,
+            pokemon_ids=all_pokemon_ids_observation,
+            pokemon_type_ids=all_pokemon_types_observation,
+            pokemon_move_ids=all_move_ids_observation,
+            pokemon_move_pps= all_move_pps_observation,
+            pokemon_all=all_pokemon_observaton,
+            event_ids=all_event_ids_observation,
+            event_step_since=all_event_step_since_observation,
+        )
+
+        self.inject = self._build_observation_op(self.observations)
 
         observation_gym_specs = tree.map_structure(
             lambda obs: obs.gym_spec(),
-            observations
+            self.observations
         )
 
         self.unflattened_gym_spec = self._to_gym_space(observation_gym_specs)
@@ -369,5 +397,34 @@ class PolarisRedObservationSpace:
             else:
                 gym_space_dict[key] = value
         return spaces.Dict(gym_space_dict)
+
+    def dump_observations(
+            self,
+            dump_path: Path,
+            observations: Dict
+    ):
+        """
+        Dumps the observation to the designated path. Pixel observations are output as images.
+        :param dump_path:
+        :param observations:
+        :return:
+        """
+
+        for observation_name, extractor in self.observations.items():
+            output_file = dump_path.with_name(dump_path.stem + f"_{observation_name}")
+            if isinstance(extractor, PixelsObservation):
+                image_file = output_file.with_suffix(".png")
+                Image.fromarray(observations[observation_name]).save(image_file)
+            elif isinstance(extractor, dict):
+                self.dump_observations(
+                    dump_path.with_name(dump_path.stem + f"_{observation_name}"), extractor
+                )
+            else:
+                log_file = output_file.with_suffix(".log")
+                with open(log_file, "w") as f:
+                    f.write(str(observations[observation_name]))
+
+
+
 
 

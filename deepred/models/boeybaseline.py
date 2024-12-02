@@ -12,12 +12,13 @@ from deepred.models.modules import Conv2DResidualModule, CategoricalValueHead
 import tensorflow as tf
 import sonnet as snt
 
-class ImpalaShallowModel(BaseModel):
+from deepred.models.tf_utils import AdaptiveMaxPooling2D
+
+
+class BoeyBaselineModel(BaseModel):
     """
-    Non recurrent version of the resnet proposed in
-    https://arxiv.org/pdf/1802.01561
-    https://github.com/google-deepmind/scalable_agent/blob/6c0c8a701990fab9053fb338ede9c915c18fa2b1/experiment.py#L211
-    We additionally accept additional ram information.
+    From
+    https://github.com/CJBoey/PokemonRedExperiments1/blob/master/baselines/boey_baselines2/custom_network.py
     TODO: We should use a categorical value function.
     """
     is_recurrent = False
@@ -45,10 +46,21 @@ class ImpalaShallowModel(BaseModel):
 
         self.conv_activation = config.get("conv_activation", tf.nn.relu)
 
+        #             nn.Conv2d(n_input_channels, 32*2, kernel_size=8, stride=4, padding=(2, 0)),
+        #             nn.ReLU(),
+        #             nn.AdaptiveMaxPool2d(output_size=(9, 9)),
+        #             nn.Conv2d(32*2, 64*2, kernel_size=4, stride=2, padding=2),
+        #             nn.ReLU(),
+        #             nn.Conv2d(64*2, 64*2, kernel_size=3, stride=1, padding=0),
+        #             nn.ReLU(),
+        #             nn.Flatten(),
+
         self.conv2D_layers = [
-            snt.Conv2D(num_ch, kernel_size, stride=stride, padding='VALID')
-            for num_ch, kernel_size, stride in [(16, 8, 4), (32, 4, 2), (32, 3, 1)]
+            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
+            for num_ch, kernel_size, stride, padding in [(64, 8, 4, [2, 0]), (128, 4, 2, [2, 2]), (128, 3, 1, "VALID")]
         ]
+        self.pixel_embeddings = snt.nets.MLP([512], activate_final=True)
+
 
         ram_embedding_dims = config.get("ram_embedding_dims", [64])
         final_embedding_dims = config.get("final_embedding_dims", [256])
@@ -78,15 +90,26 @@ class ImpalaShallowModel(BaseModel):
         # The input is of shape (...), we need to add a Batch dimension.
         # we expand  once here as the pixels are in shape (w, h), should be (w, h, 1)
         pixels = tf.expand_dims(tf.expand_dims(tf.cast(obs["pixels"], tf.float32) / 255., axis=-1), axis=0)
+        minimap = tf.expand_dims(tf.expand_dims(tf.cast(obs["minimap_sprite"], tf.float32) / 255., axis=-1), axis=0)
+        minimap = tf.expand_dims(tf.expand_dims(tf.cast(obs["minimap_warp"], tf.float32) / 255., axis=-1), axis=0)
+        minimap = tf.expand_dims(tf.expand_dims(tf.cast(obs["minimap"], tf.float32) / 255., axis=-1), axis=0)
+
+
+
         ram = tf.expand_dims(obs["ram"], axis=0)
 
-        conv_out = pixels
-        for conv in self.conv2D_layers:
+        conv_out = self.conv2D_layers[0](pixels)
+        conv_out = self.conv_activation(conv_out)
+        conv_out = AdaptiveMaxPooling2D((9,9))
+        for conv in self.conv2D_layers[1:]:
             conv_out = conv(conv_out)
             conv_out = self.conv_activation(conv_out)
+        conv_out_flat = snt.Flatten(1)(conv_out)
+        pixel_embeddings =
+
+
         ram_embeddings = self.ram_embedding(ram)
 
-        pixel_embeddings = snt.Flatten(1)(conv_out)
         prev_action_one_hot = tf.one_hot([prev_action], self.action_space.n, dtype=tf.float32)
         concat = tf.concat([pixel_embeddings, ram_embeddings, prev_action_one_hot], axis=-1)
         return self.final_embedding(concat)

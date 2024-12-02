@@ -2,6 +2,7 @@ import importlib
 import queue
 import threading
 import time
+from collections import defaultdict
 from typing import Dict, Union
 
 import numpy as np
@@ -92,7 +93,7 @@ class SynchronousTrainer(Checkpointable):
             agent_ids=self.env.get_agent_ids(),
         )
 
-        self.runnning_jobs = []
+        self.running_jobs = []
 
         self.metricbank = MetricBank(
             report_freq=self.config.report_freq
@@ -149,17 +150,21 @@ class SynchronousTrainer(Checkpointable):
         jobs = [self.matchmaking.next(self.params_map) for _ in range(n_jobs)]
         t.append(time.time())
 
-        self.runnning_jobs += self.worker_set.push_jobs(self.params_map, jobs)
+        self.running_jobs += self.worker_set.push_jobs(self.params_map, jobs)
         experience_metrics = []
         t.append(time.time())
         frames = 0
         env_steps = 0
 
-        experience, self.runnning_jobs = self.worker_set.wait(self.params_map, self.runnning_jobs, timeout=1e-2)
+        experience, self.running_jobs = self.worker_set.wait(self.params_map, self.running_jobs, timeout=60*4)
+        print(f"Collected {len(experience)} experiences.", f"{len(self.running_jobs)} jobs remaining")
+
         enqueue_time_start = time.time()
         num_batch = 0
 
-        for exp_batch in experience:
+        to_push = defaultdict(list)
+
+        for i, exp_batch in enumerate(experience):
             if isinstance(exp_batch, EpisodeMetrics):
                 experience_metrics.append(exp_batch)
                 env_steps += exp_batch.length
@@ -169,7 +174,6 @@ class SynchronousTrainer(Checkpointable):
                         self.visitation_counts[pid].push_samples(visitation_counts)
                         self.policy_map[pid].options["count_based_exploration_scales"] \
                             = self.visitation_counts[pid].get_scales()
-                        print(self.policy_map[pid].options["count_based_exploration_scales"].scales)
                     else:
                         print('Has not found any visitation counts in the metrics?')
 
@@ -183,7 +187,7 @@ class SynchronousTrainer(Checkpointable):
                     exp_batch = exp_batch.pad_sequences()
                     exp_batch[SampleBatch.SEQ_LENS] = np.array(exp_batch[SampleBatch.SEQ_LENS])
                     # print(f"rcved {owner} {exp_batch[SampleBatch.SEQ_LENS]}, version {exp_batch[SampleBatch.VERSION][0]}")
-                    self.experience_queue[owner.name].push([exp_batch])
+                    to_push[batch_pid].append(exp_batch)
                     self.policy_map[owner.name].stats["samples_generated"] += exp_batch.size()
                     GlobalCounter.incr("batch_count")
                     frames += exp_batch.size()
@@ -196,6 +200,8 @@ class SynchronousTrainer(Checkpointable):
                     # toss the batch...
                     pass
 
+        for pid, batches in to_push.items():
+            self.experience_queue[pid].push(batches)
         if frames > 0:
             GlobalTimer[GlobalTimer.PREV_FRAMES] = time.time()
             prev_frames_dt = GlobalTimer.dt(GlobalTimer.PREV_FRAMES)

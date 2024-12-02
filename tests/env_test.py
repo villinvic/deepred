@@ -6,7 +6,7 @@ from deepred.polaris_utils.counting import HashScales
 human_test = True
 
 def run(
-     game_path: str = "faster_red.gbc",
+     game_path: str = "faster_red6.gbc",
      episode_length: int = 2048,
      enable_start: bool = True,
      enable_pass: bool = human_test,
@@ -15,7 +15,7 @@ def run(
      stack_oldest_only: bool = False,
      observed_ram: tuple[str] = ("badges", "money"),
      observed_items: tuple[BagItem] = (BagItem.POKE_BALL, BagItem.POTION),
-     reward_scales: Goals = Goals(seen_pokemons=0.1, experience=2, badges=5),
+     reward_scales: Goals = dict(seen_pokemons=0.1, experience=2, badges=5),
      savestate: str | None = "faster_red_post_parcel_pokeballs.state",
      session_path: str = "red_tests",
      record: bool = False,
@@ -58,15 +58,8 @@ def run(
             observations, rewards, _, _, _ = env.step({0: action})
             env_outputs.append((observations, rewards, env.console.get_gamestate()))
 
-        output0 = env_outputs[0]
-        print(i, output0[1])
-        # for env_output in env_outputs[1:]:
-        #     output_str = str(env_output)
-        #     if output_str != output0:
-        #         print("#"*20)
-        #         print(output_str)
-        #         print("#"*20)
-        #         input()
+        for env in envs:
+            print(env.console.get_gamestate().frame)
 
 
 
