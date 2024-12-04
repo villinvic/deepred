@@ -1,3 +1,4 @@
+from collections import defaultdict
 from pathlib import Path
 from typing import Union, Tuple
 
@@ -77,11 +78,10 @@ class GBConsole(PyBoy):
         self.invalid_count = 0
         self.init_paths(output_dir)
 
-
         self._savestate = savestate
         self._frame = 0
+        self._visited_tiles : Union[None, dict] = None
         self._gamestate = GameState(self)
-
 
     def init_paths(
             self,
@@ -109,6 +109,7 @@ class GBConsole(PyBoy):
         if self.record:
             self.initialise_video()
 
+        self._visited_tiles = dict()
         self._gamestate = self.tick(2)
         return self._gamestate
 

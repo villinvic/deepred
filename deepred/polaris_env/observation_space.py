@@ -12,6 +12,7 @@ from gymnasium import spaces
 from gymnasium.spaces import Box
 from deepred.polaris_env.enums import Map, EventFlag, BagItem, ProgressionEvents
 from deepred.polaris_env.gamestate import GameState
+from deepred.polaris_env.map_dimensions import MapDimensions
 
 
 class ObsType(Enum):
@@ -198,7 +199,13 @@ class PolarisRedObservationSpace:
             bag_items = gamestate.bag_items
             return [bag_items.get(key, 0) for key in observed_items]
 
-        ram_observations = dict(
+        def scaled_position(gamestate: GameState):
+            map_w, map_h = MapDimensions[gamestate.map]
+            x = gamestate.pos_x
+            y = gamestate.pos_y
+            return x / map_w, y / map_h
+
+        base_ram_observations = dict(
             badges=RamObservation(
                 extractor=lambda gamestate: gamestate.badges,
                 nature=ObsType.BINARY,
@@ -257,15 +264,38 @@ class PolarisRedObservationSpace:
                 size=len(ProgressionEvents),
             ),
             position=RamObservation(
-                extractor=lambda gamestate: [gamestate.pos_x, gamestate.pos_y],
+                extractor=scaled_position,
                 nature=ObsType.CONTINUOUS,
                 size=2,
+                domain=(0., 1.)
+
             ),
             map_id=RamObservation(
                 extractor=lambda gamestate: gamestate.map,
                 nature=ObsType.CATEGORICAL,
                 size=len(Map)
+            ),
+            battle_type=RamObservation(
+                extractor=lambda gamestate: gamestate.battle_type,
+                nature=ObsType.CATEGORICAL,
+                size=2
+            ),
+            party_count=RamObservation(
+                extractor=lambda gamestate: gamestate.party_count,
+                nature=ObsType.CONTINUOUS,
+                scale=1/6,
+                domain=(1/6, 1.)
+            ),
+            party_full = RamObservation(
+                extractor=lambda gamestate: gamestate.party_count == 6,
+                nature=ObsType.BINARY,
+            ),
+            better_pokemon_in_box = RamObservation(
+                extractor=lambda gamestate: gamestate.better_pokemon_in_box,
+                nature=ObsType.BINARY,
             )
+            # Optional addons
+            # battle turns
         )
 
         offset = 0

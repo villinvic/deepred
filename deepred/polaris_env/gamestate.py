@@ -7,7 +7,8 @@ from PIL import Image
 from pyboy import PyBoy
 
 from deepred.polaris_env.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
-    DataStructDimension
+    DataStructDimension, Badges
+from deepred.polaris_env.map_dimensions import MapDimensions
 from deepred.polaris_env.utils import cproperty
 
 B = 256
@@ -55,6 +56,7 @@ class GameState:
                     value = getattr(self, name, None)
                     f.write(f"{name}: {value}\n")
 
+
     def __init__(
             self,
             console: "GBConsole"
@@ -67,6 +69,7 @@ class GameState:
         self._ram = console.memory
         self._ram_helper = console._ram_helper
         self._frame = console._frame
+        self._visited_tiles = console.additional_memory.visited_tiles
         self.screen = np.uint8(console.screen.ndarray[:, :, 0])
 
 
@@ -240,6 +243,13 @@ class GameState:
     @cproperty
     def frame(self) -> int:
         return self._frame
+
+    @cproperty
+    def current_checkpoint(self) -> int:
+        """
+        Returns the respawn point if we blackout.
+        """
+        return self._read(RamLocation.POKECENTER_CHECKPOINT)
 
     @cproperty
     def instant_text(self) -> bool:
@@ -450,16 +460,31 @@ class GameState:
 
     @cproperty
     def event_flags(self) -> np.ndarray:
-        # TODO: determine what is the fastest here.
+        """
+        Returns the array of flag bits.
+        """
         event_bytes = np.array(self._read(slice(RamLocation.EVENT_START, RamLocation.EVENT_END, 1)), dtype=np.uint8)
         return np.unpackbits(event_bytes, bitorder="little")[EVENT_ADDRESS_ARRAY]
 
     @cproperty
+    def event_flag_count(self) -> np.ndarray:
+        """
+        Returns the number of flags triggered.
+        """
+        return self.event_flags.sum()
+
+    @cproperty
     def pos_x(self) -> int:
+        """
+        x position of the player
+        """
         return self._read(RamLocation.POS_X)
 
     @cproperty
     def pos_y(self) -> int:
+        """
+        y position of the player
+        """
         return self._read(RamLocation.POS_Y)
 
     @cproperty
@@ -477,6 +502,55 @@ class GameState:
             bag_items[BagItem(item_type)] = item_count
 
         return bag_items
+
+    @cproperty
+    def can_use_cut(self) -> bool:
+        """
+        We can use cut only if we beat misty and have HM cut in our bag
+        """
+        return self.badges[Badges.CASCADE] == 1 and BagItem.HM_CUT in self.bag_items
+
+    @cproperty
+    def can_use_surf(self) -> bool:
+        """
+        We can use surf only if we beat Koga and have HM surf in our bag
+        """
+        return self.badges[Badges.SOUL] == 1 and BagItem.HM_SURF in self.bag_items
+
+    @cproperty
+    def can_use_silph_scope(self) -> bool:
+        """
+        We can use the silph scope only if we can use cut and have the scope in our bag
+        """
+        return self.can_use_cut and BagItem.SILPH_SCOPE in self.bag_items
+
+    @cproperty
+    def can_use_flute(self) -> bool:
+        """
+        We can use the flute only if we can use cut and have the flute in our bag
+        """
+        return self.can_use_cut and BagItem.POKE_FLUTE in self.bag_items
+
+    @cproperty
+    def field_moves(self) -> list:
+        """
+        List of available field moves
+        """
+        return [
+            int(field_move) for field_move in [self.can_use_cut, self.can_use_flute,
+                                               self.can_use_silph_scope, self.can_use_surf]
+        ]
+
+    @cproperty
+    def hms(self) -> list:
+        """
+        Returns the vector of collected HMs.
+        We do not need Flash and Strength (if we patch the game).
+        # TODO. Fly does not appear to be usable for now as well. Maybe we can improve that
+        """
+        return [int(item in self.bag_items) for item in [
+            BagItem.HM_CUT, BagItem.HM_SURF # BagItem.HM_FLY, BagItem.HM_FLASH, BagItem.HM_STRENGTH
+        ]]
 
     @cproperty
     def safari_steps(self) -> int:
@@ -553,16 +627,50 @@ class GameState:
                 return self.hdst_map in (255, self.map)
 
     @cproperty
-    def minimap_sprite(self) -> np.ndarray:
+    def visited_tiles(self) -> np.ndarray:
+        """
+        A visualisation of visited tiles around the player.
+        """
+        # TODO: clarify whats going on here.
+
+        visited_tiles_on_current_map = np.zeros((9, 10), dtype=np.uint8)
+        map_w, map_h = MapDimensions[self.map].shape
+        pos_x, pos_y = self.pos_x, self.pos_y
+
+        true_top_left_x = pos_x - 4
+        adjust_x = 0
+        if true_top_left_x < 0:
+            adjust_x = -true_top_left_x
+        true_top_left_y = pos_y - 4
+        adjust_y = 0
+        if true_top_left_y < 0:
+            adjust_y = - true_top_left_y
+
+        top_left_x = max(0, true_top_left_x)
+        top_left_y = max(0, true_top_left_y)
+        bottom_right_x = min(map_w, pos_x + 6)
+        bottom_right_y = min(map_h, pos_x + 5)
+
+        visited_tiles_on_current_map[
+        adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
+        ] = self._visited_tiles[self.map][top_left_y: bottom_right_y, top_left_x:bottom_right_x]
+
+        return visited_tiles_on_current_map
+
+    @cproperty
+    def sprite_map(self) -> np.ndarray:
         """
         A minimap displaying the sprites.
         """
-        minimap_sprite = np.zeros((9, 10), dtype=np.int16)
+        # TODO: do not know the max value for s.tiles[0].tile_identifier.
+        #   The game appears to have 72 sprites...
+
+        sprite_map = np.zeros((9, 10), dtype=np.uint8)
         sprites = self._ram_helper._sprites_on_screen()
         for idx, s in enumerate(sprites):
             if (idx + 1) % 4 != 0:
                 continue
-            minimap_sprite[s.y // 16, s.x // 16] = (s.tiles[0].tile_identifier + 1) / 4
+            sprite_map[s.y // 16, s.x // 16] = (s.tiles[0].tile_identifier + 1) / 4
 
         if self.map == Map.VERMILION_GYM and self.event_flags[EventFlag.EVENT_2ND_LOCK_OPENED] == 0:
             trashcans_coords = [
@@ -575,61 +683,110 @@ class GameState:
             can = self._read(RamLocation.SECOND_LOCK_TRASH_CAN) \
                 if (self.event_flags[EventFlag.EVENT_1ST_LOCK_OPENED] == 1) \
                 else self._read(RamLocation.FIRST_LOCK_TRASH_CAN)
-            assign_new_sprite_in_sprite_minimap(minimap_sprite, 384, *trashcans_coords[can])
+            assign_new_sprite_in_sprite_minimap(sprite_map, 255, *trashcans_coords[can])
 
         elif self.map in switch_coords:
             for coords in switch_coords[self.map]:
-                assign_new_sprite_in_sprite_minimap(minimap_sprite, 383, *coords)
+                assign_new_sprite_in_sprite_minimap(sprite_map, 255, *coords)
+
+        return sprite_map
+
+    @cproperty
+    def warp_map(self):
+        warp_map = np.zeros((9, 10), dtype=np.int8)
+
+        warps = WARP_DICT[map_name]
+        if not warps:
+            return minimap_warp
+        x, y = self.current_coords
+        top_left_x = max(0, x - 4)
+        top_left_y = max(0, y - 4)
+        bottom_right_x = min(MAP_DICT[MAP_ID_REF[cur_map_id]]['width'], x + 5)
+        bottom_right_y = min(MAP_DICT[MAP_ID_REF[cur_map_id]]['height'], y + 4)
+        # patched warps, read again from ram
+        if cur_map_id in [0xCB, 0xEC]:  # ROCKET_HIDEOUT_ELEVATOR 0xCB, SIPLH_CO_ELEVATOR 0xEC
+            warps = []
+            n_warps = self.read_ram_m(RAM.wNumberOfWarps)  # wNumberOfWarps
+            for i in range(n_warps):
+                warp_addr = RAM.wWarpEntries.value + i * 4
+                warp_y = self.read_m(warp_addr + 0)
+                warp_x = self.read_m(warp_addr + 1)
+                warp_warp_id = self.read_m(warp_addr + 2)
+                warp_map_id = self.read_m(warp_addr + 3)
+                if warp_map_id in [199, 200, 201, 202] and warp_map_id not in self.hideout_elevator_maps:
+                    self.hideout_elevator_maps.append(warp_map_id)
+                warps.append({
+                    'x': warp_x,
+                    'y': warp_y,
+                    'warp_id': warp_warp_id,
+                    'target_map_name': MAP_ID_REF[warp_map_id],
+                })
+
+        for warp in warps:
+            if warp['x'] >= top_left_x and warp['x'] <= bottom_right_x and warp['y'] >= top_left_y and warp['y'] <= bottom_right_y:
+                if warp['target_map_name'] != 'LAST_MAP':
+                    target_map_name = warp['target_map_name']
+                else:
+                    last_map_id = self.read_m(0xd365)  # wLastMap
+                    target_map_name = MAP_ID_REF[last_map_id]
+                warp_id = warp['warp_id'] - 1
+                warp_name = f'{target_map_name}@{warp_id}'
+                if warp_name in WARP_ID_DICT:
+                    actual_warp_id = WARP_ID_DICT[warp_name] + 1  # 0 is reserved for no warp / padding
+                else:
+                    actual_warp_id = 829
+                    # if warp_name not in ['ROUTE_22@1']:  # ignore expected bugged warps, workaround-ed
+                    if warp_name in ['SAFFRON_CITY@9']:  # ignore expected bugged warps, workaround-ed
+                        actual_warp_id = 828
+                    else:
+                        print(f'warp_name: {warp_name} not in WARP_ID_DICT')
+                minimap_warp[warp['y'] - top_left_y, warp['x'] - top_left_x] = actual_warp_id
+        return minimap_warp
 
     @cproperty
     def feature_maps(self) -> np.ndarray:
         """
         A set of map features compiled in one image.
+        1. walkable tiles
+        2. trees
+        3. overworld ledges
+        4. water
+        5. previously visited tiles
         """
-        # TODO: seen map: dict of maps
-        explored_tiles = defaultdict(
-            lambda : defaultdict(int)
-        )
+        maps = np.zeros((7, 9, 10), dtype=np.uint8)
+        # TODO:
+        #    clean up this function, we do not understand whats going on very well.
+        #   - note: they do not update the count when player is warping ?
+        # TODO: how do they process this into the model after ??
 
-        # TODO: do we post process by normalising ?
-        explored_tiles[self.map][(self.pos_x, self.pos_y)] = self.frame
-
-        ledges_dict = {
-            'down': [54, 55],
-            'left': 39,
-            'right': [13, 29]
-        }
-        minimap = np.zeros((6, 9, 10), dtype=np.float32)
         bottom_left_screen_tiles = self.bottom_left_screen_tiles
         # walkable
-        minimap[0] = self._ram_helper._get_screen_walkable_matrix()
+        maps[0] = self._ram_helper._get_screen_walkable_matrix()
 
+        # Water
         if self.tileset_id == TileSet.VERMILION_PORT:
-            minimap[5] = (bottom_left_screen_tiles == 20).astype(np.float32)
+            maps[5] = (bottom_left_screen_tiles == 20).astype(np.uint8)
         elif self.tileset_id in [TileSet.OVERWORLD, TileSet.FOREST, TileSet.TILESET_5, TileSet.GYM, TileSet.TILESET_13,
                                  TileSet.TILESET_17, TileSet.TILESET_22, TileSet.TILESET_23]:
-            # What is this ? water ?
-            minimap[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.float32)
+            maps[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.uint8)
 
         if self.tileset_id == TileSet.OVERWORLD:  # is overworld
             # tree
-            minimap[1] = (bottom_left_screen_tiles == 61).astype(np.float32)
+            maps[1] = (bottom_left_screen_tiles == 61).astype(np.uint8)
             # ledge down
-            minimap[2] = np.isin(bottom_left_screen_tiles, ledges_dict['down']).astype(np.float32)
+            maps[2] = np.isin(bottom_left_screen_tiles, [54, 55]).astype(np.uint8)
             # ledge left
-            minimap[3] = (bottom_left_screen_tiles == ledges_dict['left']).astype(np.float32)
+            maps[3] = (bottom_left_screen_tiles == 39).astype(np.uint8)
             # ledge right
-            minimap[4] = np.isin(bottom_left_screen_tiles, ledges_dict['right']).astype(np.float32)
+            maps[4] = np.isin(bottom_left_screen_tiles, [13, 29]).astype(np.uint8)
         elif self.tileset_id == TileSet.GYM:
             # tree
-            minimap[1] = (bottom_left_screen_tiles == 80).astype(np.float32)  # 0x50
+            maps[1] = (bottom_left_screen_tiles == 80).astype(np.uint8)  # 0x50
 
         # get seen_map obs
-        seen_map_obs = self.get_all_seen_map_obs()  # (8, 9, 10)
+        maps[6] = self.visited_tiles
 
-        minimap = np.concatenate([minimap, seen_map_obs], axis=0)  # (14, 9, 10)
-        self._minimap_obs = minimap
-        return self._minimap_obs
+        return maps
 
 
 switch_coords = {
@@ -639,6 +796,10 @@ switch_coords = {
     Map.POKEMON_MANSION_B1F: [(20, 3), (18, 25)],
 
 }
+
+def uint8_sprite(sprite_id):
+    return round(255* sprite_id/400)
+
 def assign_new_sprite_in_sprite_minimap(
         minimap,
         sprite_id,

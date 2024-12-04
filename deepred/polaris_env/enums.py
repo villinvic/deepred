@@ -89,6 +89,8 @@ class RamLocation(IntEnum):
 
     FIRST_LOCK_TRASH_CAN = 0xD743
     SECOND_LOCK_TRASH_CAN = 0xD744
+    
+    POKECENTER_CHECKPOINT = 0xD719
 
     # def __add__(self, other: Union[Enum, int]):
     #     if isinstance(other, int):
@@ -102,36 +104,20 @@ class DataStructDimension(IntEnum):
     POKEMON_NICKNAME = 11
     WARP = 4
     
+
+class Badges(IntEnum):
+    BOULDER = 0
+    CASCADE = 1
+    THUNDER = 2
+    RAINBOW = 3
+    SOUL    = 4
+    MARSH   = 5
+    VOLCANO = 6
+    EARTH   = 7
+    
     
 class TileSet(IntEnum):
-    """
-            if tileset_id in [0, 3, 5, 7, 13, 14, 17, 22, 23]:  # 0 overworld, 3 forest,
-            # water
-            if tileset_id == 14:  # vermilion port
-                minimap[5] = (bottom_left_screen_tiles == 20).astype(np.float32)
-            else:
-                minimap[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.float32)
-
-        if tileset_id == 0:  # is overworld
-            # tree
-            minimap[1] = (bottom_left_screen_tiles == 61).astype(np.float32)
-            # ledge down
-            minimap[2] = np.isin(bottom_left_screen_tiles, ledges_dict['down']).astype(np.float32)
-            # ledge left
-            minimap[3] = (bottom_left_screen_tiles == ledges_dict['left']).astype(np.float32)
-            # ledge right
-            minimap[4] = np.isin(bottom_left_screen_tiles, ledges_dict['right']).astype(np.float32)
-        elif tileset_id == 7:  # is gym
-            # tree
-            minimap[1] = (bottom_left_screen_tiles == 80).astype(np.float32)  # 0x50
-
-        # get seen_map obs
-        seen_map_obs = self.get_all_seen_map_obs()  # (8, 9, 10)
-
-        minimap = np.concatenate([minimap, seen_map_obs], axis=0)  # (14, 9, 10)
-        self._minimap_obs = minimap
-        return self._minimap_obs
-    """
+    
     OVERWORLD            = 0
     TILESET_1            = 1
     TILESET_2            = 2
@@ -276,56 +262,56 @@ class BagItem(IntEnum):
     HM_SURF = 0xC6
     HM_STRENGTH = 0xC7
     HM_FLASH = 0xC8
-    HM_MEGA_PUNCH       = 0xC9
-    HM_RAZOR_WIND       = 0xCA
-    HM_SWORDS_DANCE     = 0xCB
-    HM_WHIRLWIND        = 0xCC
-    HM_MEGA_KICK        = 0xCD
-    HM_TOXIC            = 0xCE
-    HM_HORN_DRILL       = 0xCF
-    HM_BODY_SLAM        = 0xD0
-    HM_TAKE_DOWN        = 0xD1
-    HM_DOUBLE_EDGE      = 0xD2
-    HM_BUBBLEBEAM       = 0xD3
-    HM_WATER_GUN        = 0xD4
-    HM_ICE_BEAM         = 0xD5
-    HM_BLIZZARD         = 0xD6
-    HM_HYPER_BEAM       = 0xD7
-    HM_PAY_DAY          = 0xD8
-    HM_SUBMISSION       = 0xD9
-    HM_COUNTER          = 0xDA
-    HM_SEISMIC_TOSS     = 0xDB
-    HM_RAGE             = 0xDC
-    HM_MEGA_DRAIN       = 0xDD
-    HM_SOLARBEAM        = 0xDE
-    HM_DRAGON_RAGE      = 0xDF
-    HM_THUNDERBOLT      = 0xE0
-    HM_THUNDER          = 0xE1
-    HM_EARTHQUAKE       = 0xE2
-    HM_FISSURE          = 0xE3
-    HM_DIG              = 0xE4
-    HM_PSYCHIC_M        = 0xE5
-    HM_TELEPORT         = 0xE6
-    HM_MIMIC            = 0xE7
-    HM_DOUBLE_TEAM      = 0xE8
-    HM_REFLECT          = 0xE9
-    HM_BIDE             = 0xEA
-    HM_METRONOME        = 0xEB
-    HM_SELFDESTRUCT     = 0xEC
-    HM_EGG_BOMB         = 0xED
-    HM_FIRE_BLAST       = 0xEE
-    HM_SWIFT            = 0xEF
-    HM_SKULL_BASH       = 0xF0
-    HM_SOFTBOILED       = 0xF1
-    HM_DREAM_EATER      = 0xF2
-    HM_SKY_ATTACK       = 0xF3
-    HM_REST             = 0xF4
-    HM_THUNDER_WAVE     = 0xF5
-    HM_PSYWAVE          = 0xF6
-    HM_EXPLOSION        = 0xF7
-    HM_ROCK_SLIDE       = 0xF8
-    HM_TRI_ATTACK       = 0xF9
-    HM_SUBSTITUTE       = 0xFA
+    TM_MEGA_PUNCH       = 0xC9
+    TM_RAZOR_WIND       = 0xCA
+    TM_SWORDS_DANCE     = 0xCB
+    TM_WHIRLWIND        = 0xCC
+    TM_MEGA_KICK        = 0xCD
+    TM_TOXIC            = 0xCE
+    TM_HORN_DRILL       = 0xCF
+    TM_BODY_SLAM        = 0xD0
+    TM_TAKE_DOWN        = 0xD1
+    TM_DOUBLE_EDGE      = 0xD2
+    TM_BUBBLEBEAM       = 0xD3
+    TM_WATER_GUN        = 0xD4
+    TM_ICE_BEAM         = 0xD5
+    TM_BLIZZARD         = 0xD6
+    TM_HYPER_BEAM       = 0xD7
+    TM_PAY_DAY          = 0xD8
+    TM_SUBMISSION       = 0xD9
+    TM_COUNTER          = 0xDA
+    TM_SEISMIC_TOSS     = 0xDB
+    TM_RAGE             = 0xDC
+    TM_MEGA_DRAIN       = 0xDD
+    TM_SOLARBEAM        = 0xDE
+    TM_DRAGON_RAGE      = 0xDF
+    TM_THUNDERBOLT      = 0xE0
+    TM_THUNDER          = 0xE1
+    TM_EARTHQUAKE       = 0xE2
+    TM_FISSURE          = 0xE3
+    TM_DIG              = 0xE4
+    TM_PSYCHIC_M        = 0xE5
+    TM_TELEPORT         = 0xE6
+    TM_MIMIC            = 0xE7
+    TM_DOUBLE_TEAM      = 0xE8
+    TM_REFLECT          = 0xE9
+    TM_BIDE             = 0xEA
+    TM_METRONOME        = 0xEB
+    TM_SELFDESTRUCT     = 0xEC
+    TM_EGG_BOMB         = 0xED
+    TM_FIRE_BLAST       = 0xEE
+    TM_SWIFT            = 0xEF
+    TM_SKULL_BASH       = 0xF0
+    TM_SOFTBOILED       = 0xF1
+    TM_DREAM_EATER      = 0xF2
+    TM_SKY_ATTACK       = 0xF3
+    TM_REST             = 0xF4
+    TM_THUNDER_WAVE     = 0xF5
+    TM_PSYWAVE          = 0xF6
+    TM_EXPLOSION        = 0xF7
+    TM_ROCK_SLIDE       = 0xF8
+    TM_TRI_ATTACK       = 0xF9
+    TM_SUBSTITUTE       = 0xFA
 
 class Pokemon(IntEnum):
     M_GLITCH = 0x0
@@ -768,6 +754,7 @@ class Map(IntEnum):
     LORELEIS_ROOM                  = 0xF5
     BRUNOS_ROOM                    = 0xF6
     AGATHAS_ROOM                   = 0xF7
+    UNKNOWN                        = 0xFF
 
 class ProgressionEvents(Enum):
     # TODO: this should list the most important events to solve the game.
