@@ -5,11 +5,12 @@ from typing import Union, List, Dict
 import numpy as np
 from PIL import Image
 from pyboy import PyBoy
+from tensorflow.python.keras.backend import dtype
 
 from deepred.polaris_env.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
-    DataStructDimension, Badges
+    DataStructDimension, Badges, BattleType
 from deepred.polaris_env.map_dimensions import MapDimensions
-from deepred.polaris_env.map_warps import MapWarps, MapWarp
+from deepred.polaris_env.map_warps import MapWarps, MapWarp, NamedWarpIds
 from deepred.polaris_env.utils import cproperty
 
 B = 256
@@ -70,6 +71,7 @@ class GameState:
         self._ram = console.memory
         self._ram_helper = console._ram_helper
         self._frame = console._frame
+        self.step = console.step
         self._additional_memory = console.additional_memory.visited_tiles
         self.screen = np.uint8(console.screen.ndarray[:, :, 0])
 
@@ -116,7 +118,7 @@ class GameState:
         :return: True if in battle
         """
         # Battle type is 0 when not in battle.
-        return self.battle_type != 0
+        return self.battle_type != BattleType.NONE
 
     def is_dialog_frame(self) -> bool:
         """
@@ -181,7 +183,7 @@ class GameState:
 
     def _read_double(
             self,
-            addr: Union[RamLocation, slice]
+            addr: Union[RamLocation, int, slice]
     ) -> Union[int, List]:
         """
         Reads the game's RAM at the given address as a double.
@@ -198,7 +200,7 @@ class GameState:
 
     def _read_triple(
             self,
-            addr: Union[RamLocation, slice]
+            addr: Union[RamLocation, int, slice]
     ) -> Union[int, List]:
         """
         Reads the game's RAM at the given address as a triple.
@@ -216,7 +218,7 @@ class GameState:
 
     def _read_bcd(
             self,
-            addr: Union[RamLocation, slice]
+            addr: Union[RamLocation, int, slice]
     ) -> int:
         """
         Reads the game's RAM at the given address as a binary coded decimal.
@@ -275,12 +277,12 @@ class GameState:
         return self._read(RamLocation.PARTY_MENU_ANIMATION_INDEX)
 
     @cproperty
-    def battle_type(self) -> int:
+    def battle_type(self) -> BattleType:
         """
         :return: True if in battle
         """
         # Battle type is 0 when not in battle.
-        return self._read(RamLocation.BATTLE_TYPE)
+        return BattleType(self._read(RamLocation.BATTLE_TYPE))
 
     @cproperty
     def player_money(self) -> int:
@@ -306,22 +308,259 @@ class GameState:
         return self._read(RamLocation.TOWN_MAP_STATE) == 205
 
     @cproperty
+    def pokemons(self) -> np.ndarray:
+        """
+        Party and opponent pokemons.
+        """
+        species = np.zeros((12,), dtype=np.uint8)
+
+        for i in range(self.party_count):
+            species[i] = self._read(RamLocation.PARTY_0_SPECIES + i * DataStructDimension.POKEMON_STATS)
+
+        if self.battle_type == BattleType.WILD:
+            species[6] = self._read(RamLocation.WILD_POKEMON_SPECIES)
+
+        elif self.battle_type == BattleType.TRAINER:
+            for i in range(self.opponent_party_count):
+                species[i+6] = self._read(RamLocation.OPPONENT_POKEMON_0_SPECIES + i * DataStructDimension.POKEMON_STATS)
+
+        return species
+
+    @cproperty
     def party_pokemons(self) -> List[Pokemon]:
         """
-        The current party pokemon ids.
+        Party Pokemons as enums.
         """
-        return [Pokemon(ID) for ID in self._read(slice(RamLocation.PARTY_0_ID, RamLocation.PARTY_5_ID+1, 1))]
+        return [Pokemon(pid) for pid in self.pokemons[:6]]
 
     @cproperty
     def party_count(self) -> int:
         """
         :return: The number of pokemons in the current party
         """
-        s = 0
-        for pokemon in self.party_pokemons:
-            if pokemon not in (Pokemon.NONE, Pokemon.M_GLITCH):
-                s += 1
-        return s
+        return self._read(RamLocation.PARTY_COUNT)
+
+    @cproperty
+    def opponent_party_count(self) -> int:
+        """
+        :return: The number of pokemons in the opponent's party
+        """
+        return self._read(RamLocation.OPPONENT_PARTY_COUNT)
+
+    @cproperty
+    def pokemon_types(self) -> np.ndarray:
+        """
+        Array of shape (12, 2)
+        Types for party and opponent pokemons.
+        :return:
+        """
+        types = np.zeros((12, 2), dtype=np.uint8)
+
+        for i in range(self.party_count):
+            type1 = self._read(RamLocation.PARTY_0_TYPE0 + i * DataStructDimension.POKEMON_STATS)
+            type2 = self._read(RamLocation.PARTY_0_TYPE1 + i * DataStructDimension.POKEMON_STATS)
+            types[i] = type1, type2
+
+        if self.battle_type == BattleType.WILD:
+
+            type1 = self._read(RamLocation.WILD_POKEMON_TYPE0)
+            type2 = self._read(RamLocation.WILD_POKEMON_TYPE1)
+            types[6] = type1, type2
+
+        elif self.battle_type == BattleType.TRAINER:
+            for i in range(self.opponent_party_count):
+                type1 = self._read(RamLocation.OPPONENT_POKEMON_0_TYPE0 + i * DataStructDimension.POKEMON_STATS)
+                type2 = self._read(RamLocation.OPPONENT_POKEMON_0_TYPE1 + i * DataStructDimension.POKEMON_STATS)
+                types[i+6] = type1, type2
+
+        return fix_pokemon_types(types)
+
+    @cproperty
+    def pokemon_moves(self) -> np.ndarray:
+        """
+        Array of shape (12, 4)
+        Moves for party and opponent pokemons.
+        """
+        moves = np.zeros((12, 4), dtype=np.uint8)
+
+        for i in range(self.party_count):
+            move0 = self._read(RamLocation.PARTY_0_MOVE0 + i * DataStructDimension.POKEMON_STATS)
+            move1 = self._read(RamLocation.PARTY_0_MOVE1 + i * DataStructDimension.POKEMON_STATS)
+            move2 = self._read(RamLocation.PARTY_0_MOVE2 + i * DataStructDimension.POKEMON_STATS)
+            move3 = self._read(RamLocation.PARTY_0_MOVE3 + i * DataStructDimension.POKEMON_STATS)
+
+            moves[i] = move0, move1, move2, move3
+
+        if self.battle_type == BattleType.WILD:
+            move0 = self._read(RamLocation.WILD_POKEMON_MOVE0)
+            move1 = self._read(RamLocation.WILD_POKEMON_MOVE1)
+            move2 = self._read(RamLocation.WILD_POKEMON_MOVE2)
+            move3 = self._read(RamLocation.WILD_POKEMON_MOVE3)
+            moves[6] = move0, move1, move2, move3
+
+        elif self.battle_type == BattleType.TRAINER:
+            for i in range(self.opponent_party_count):
+                move0 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE0 + i * DataStructDimension.POKEMON_STATS)
+                move1 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE1 + i * DataStructDimension.POKEMON_STATS)
+                move2 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE2 + i * DataStructDimension.POKEMON_STATS)
+                move3 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE3 + i * DataStructDimension.POKEMON_STATS)
+                moves[i+6] = move0, move1, move2, move3
+
+        return moves
+
+    @cproperty
+    def pokemon_pps(self) -> np.ndarray:
+        """
+        Array of shape (12, 4)
+        Move PPs for party and opponent pokemons.
+        """
+        moves = np.zeros((12, 4), dtype=np.uint8)
+
+        for i in range(self.party_count):
+            move0 = self._read(RamLocation.PARTY_0_MOVE0 + i * DataStructDimension.POKEMON_STATS)
+            move1 = self._read(RamLocation.PARTY_0_MOVE1 + i * DataStructDimension.POKEMON_STATS)
+            move2 = self._read(RamLocation.PARTY_0_MOVE2 + i * DataStructDimension.POKEMON_STATS)
+            move3 = self._read(RamLocation.PARTY_0_MOVE3 + i * DataStructDimension.POKEMON_STATS)
+            moves[i] = move0, move1, move2, move3
+
+        if self.battle_type == BattleType.WILD:
+            move0 = self._read(RamLocation.WILD_POKEMON_MOVE0_PP)
+            move1 = self._read(RamLocation.WILD_POKEMON_MOVE1_PP)
+            move2 = self._read(RamLocation.WILD_POKEMON_MOVE2_PP)
+            move3 = self._read(RamLocation.WILD_POKEMON_MOVE3_PP)
+            moves[6, :] = move0, move1, move2, move3
+
+        elif self.battle_type == BattleType.TRAINER:
+            for i in range(self.opponent_party_count):
+                move0 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE0_PP + i * DataStructDimension.POKEMON_STATS)
+                move1 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE1_PP + i * DataStructDimension.POKEMON_STATS)
+                move2 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE2_PP + i * DataStructDimension.POKEMON_STATS)
+                move3 = self._read(RamLocation.OPPONENT_POKEMON_0_MOVE3_PP + i * DataStructDimension.POKEMON_STATS)
+                moves[i + 6] = move0, move1, move2, move3
+
+        return moves
+
+    @cproperty
+    def is_swapping(self) -> bool:
+        """
+        :return: Are we in the swapping menu ?
+        """
+        return self._read(RamLocation.BATTLE_MENU_STATE) == 0x04
+
+
+    @cproperty
+    def swapping_position(self):
+        """
+        Position of the pokemon with which we are going to swap.
+        :return:
+        """
+        if self.is_swapping:
+            chosen_mon = self._read(RamLocation.POKEMON_SWAPPING_POS)
+            return chosen_mon - 1
+
+
+    def party_pokemon_obs(
+            self,
+            start_address: int,
+            party_pokemon: bool,
+            position: int,
+            wild_pokemon: bool = False # TODO: never used ?
+    ) -> List:
+        """
+        Returns a list of pokemon attributes (14) for party pokemons, or opponent pokemons that are not battling.
+        TODO: think if we move this kind of function into the observation space module...
+        TODO: Add one hot for pokemon position.
+        :param start_address: starting address of the concerned pokemon.
+        :param party_pokemon: is it a pokemon from our party ?
+        :param position: position of the pokemon in the team.
+        :param wild_pokemon: is it a wild pokemon ?
+        """
+        hp = self._read_double(start_address + 1) / 250
+        return [
+            hp,  # current hp
+            self._read(start_address + 33) / 100, # levels
+            self._read_double(start_address + 34) / 250, # max hp
+            self._read_double(start_address + 36) / 134, # attack
+            self._read_double(start_address + 38) / 180,  # defense
+            self._read_double(start_address + 40) / 140,  # speed
+            self._read_double(start_address + 42) / 154,  # special
+            int(hp > 0), # knocked out ?
+            int(wild_pokemon or (
+                (party_pokemon and position == self._read(RamLocation.PARTY_SENT_OUT))
+                or
+                position == self._read(RamLocation.OPPONENT_POKEMON_SENT_OUT) # should always be False ?
+            )), # is sent out ?
+            int(party_pokemon and position == self.swapping_position) # are we about to swap with this pokemon ?
+        ] + pokemon_status(self._read(start_address + 4))
+
+    def opponent_sent_out_pokemon_obs(
+            self,
+            start_address: int,
+            party_pokemon: bool,
+            position: int,
+            wild_pokemon: bool = False
+    ) -> List:
+        """
+        Returns a list of pokemon attributes for battling opponent pokemons
+        # TODO: think if we move this kind of function into the observation space module...
+        :param start_address: starting address of the concerned pokemon.
+        :param party_pokemon: is it a pokemon from our party ?
+        :param position: position of the pokemon in the team.
+        :param wild_pokemon: is it a wild pokemon ?
+        """
+        hp = self._read_double(start_address + 1) / 250
+        return [
+            hp,  # current hp
+            int(hp > 0),  # knocked out ?
+            self._read(start_address + 14) / 100, # levels
+            self._read_double(start_address + 15) / 250, # max hp
+            self._read_double(start_address + 17) / 134, # attack
+            self._read_double(start_address + 19) / 180,  # defense
+            self._read_double(start_address + 21) / 140,  # speed
+            self._read_double(start_address + 23) / 154,  # special
+            1, # sent out # could skip thoses, but they are used so that we can put together the stats of the 12 pokemons.
+            0 # TODO: does this make sense ?
+        ] + pokemon_status(self._read(start_address + 4))
+
+    def pokemon_attributes(self) -> np.ndarray:
+        """
+        An array of shape (12, 14) holding attributes for all pokemons.
+        I feel like having every info about the opponent team is kind of cheating, but again, you can also cheat
+        by checking the game online I guess.
+        """
+        attributes = np.zeros((12, 14), np.float32)
+
+        for i in range(self.party_count):
+            attributes[i] = self.party_pokemon_obs(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS,
+                                                   party_pokemon=True, position=i, wild_pokemon=False)
+
+        if self.battle_type == BattleType.WILD:
+            attributes[6] = self.opponent_sent_out_pokemon_obs(
+                        RamLocation.WILD_POKEMON_SPECIES,  # this is also the address for opponent sent out pokemons.
+                        party_pokemon=False,
+                        position=0,
+                        wild_pokemon=True,
+                    )
+
+        elif self.battle_type == BattleType.TRAINER:
+            for i in range(self.opponent_party_count):
+                if i == self._read(RamLocation.OPPONENT_POKEMON_SENT_OUT):
+                    attributes[i + 6] = self.opponent_sent_out_pokemon_obs(
+                        RamLocation.WILD_POKEMON_SPECIES,  # this is also the address for opponent sent out pokemons.
+                        party_pokemon=False,
+                        position=i,
+                        wild_pokemon=False,
+                    )
+                else:
+                    attributes[i + 6] = self.party_pokemon_obs(
+                        RamLocation.OPPONENT_POKEMON_0_SPECIES,  # this is also the address for opponent sent out pokemons.
+                        party_pokemon=False,
+                        position=i,
+                        wild_pokemon=False,
+                    )
+
+        return attributes
+
 
     @cproperty
     def textbox_id(self) -> int:
@@ -666,7 +905,7 @@ class GameState:
         # TODO: do not know the max value for s.tiles[0].tile_identifier.
         #   The game appears to have 72 sprites...
 
-        sprite_map = np.zeros((9, 10), dtype=np.uint8)
+        sprite_map = np.zeros((9, 10), dtype=np.uint16)
         sprites = self._ram_helper._sprites_on_screen()
         for idx, s in enumerate(sprites):
             if (idx + 1) % 4 != 0:
@@ -684,11 +923,11 @@ class GameState:
             can = self._read(RamLocation.SECOND_LOCK_TRASH_CAN) \
                 if (self.event_flags[EventFlag.EVENT_1ST_LOCK_OPENED] == 1) \
                 else self._read(RamLocation.FIRST_LOCK_TRASH_CAN)
-            assign_new_sprite_in_sprite_minimap(sprite_map, 255, *trashcans_coords[can])
+            assign_new_sprite_in_sprite_minimap(sprite_map, 384, *trashcans_coords[can])
 
         elif self.map in switch_coords:
             for coords in switch_coords[self.map]:
-                assign_new_sprite_in_sprite_minimap(sprite_map, 255, *coords)
+                assign_new_sprite_in_sprite_minimap(sprite_map, 383, *coords)
 
         return sprite_map
 
@@ -728,13 +967,16 @@ class GameState:
 
         for warp in warps:
             if top_left_x <= warp.x <= bottom_right_x and top_left_y <= warp.y <= bottom_right_y:
-                # if warp.destination != Map.UNKNOWN:
-                #     destination = warp.destination
-                # else:
-                #     last_map_id = self._read(RamLocation.LAST_MAP)
-                #     destination = Map(last_map_id)
+                if warp.destination != Map.UNKNOWN:
+                    destination = warp.destination
+                else:
+                    last_map_id = self._read(RamLocation.LAST_MAP)
+                    destination = Map(last_map_id)
 
-                warp_map[warp.y - top_left_y, warp.x - top_left_x] = 1
+                # TODO: take care of unknown warps.
+                encoded_warp = NamedWarpIds[f"{destination.name}@{warp.id}"]
+                warp_map[warp.y - top_left_y, warp.x - top_left_x] = encoded_warp + 1
+
         return warp_map
 
     @cproperty
@@ -783,6 +1025,20 @@ class GameState:
         return maps
 
 
+def pokemon_status(status_byte):
+    """
+    Converts a byte into status bits. Last bit unused.
+    """
+    return [int(status_byte & 2**i > 0) for i in range(7)]
+
+def fix_pokemon_types(types: np.ndarray) -> np.ndarray:
+    """
+    TODO: check if this is fine ?
+    """
+    types[types>=9] -= 11
+    return types
+
+
 switch_coords = {
     Map.POKEMON_MANSION_1F: [(2, 5)],
     Map.POKEMON_MANSION_2F: [(2, 11)],
@@ -790,9 +1046,6 @@ switch_coords = {
     Map.POKEMON_MANSION_B1F: [(20, 3), (18, 25)],
 
 }
-
-def uint8_sprite(sprite_id):
-    return round(255* sprite_id/400)
 
 def assign_new_sprite_in_sprite_minimap(
         minimap,

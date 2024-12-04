@@ -9,6 +9,7 @@ from pyboy import PyBoy
 from pyboy.utils import WindowEvent
 from PIL import Image
 from deepred.polaris_env.action_space import PolarisRedActionSpace
+from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.enums import StartMenuItem, EventFlag, BagItem, RamLocation
 from deepred.polaris_env.game_patching import AgentHelper, GamePatching
 from deepred.polaris_env.gamestate import GameState
@@ -80,7 +81,8 @@ class GBConsole(PyBoy):
 
         self._savestate = savestate
         self._frame = 0
-        self._visited_tiles : Union[None, dict] = None
+        self._step = 0
+        self._additional_memory : Union[None, AdditionalMemory] = None
         self._gamestate = GameState(self)
 
     def init_paths(
@@ -109,7 +111,9 @@ class GBConsole(PyBoy):
         if self.record:
             self.initialise_video()
 
-        self._visited_tiles = dict()
+        self._frame = 0
+        self._step = 0
+        self._additional_memory : Union[None, AdditionalMemory] = None
         self._gamestate = self.tick(2)
         return self._gamestate
 
@@ -200,6 +204,7 @@ class GBConsole(PyBoy):
                 if additional_skip > 500:
                     self.handle_error("stuck skipping.")
 
+        self._step += 1
         self._gamestate = self.tick(1, render=True)
 
         # Is this fine to patch here ?
