@@ -91,6 +91,7 @@ class RamLocation(IntEnum):
     SECOND_LOCK_TRASH_CAN = 0xD744
     
     POKECENTER_CHECKPOINT = 0xD719
+    LAST_MAP = 0xD365
 
     # def __add__(self, other: Union[Enum, int]):
     #     if isinstance(other, int):

@@ -9,6 +9,7 @@ from pyboy import PyBoy
 from deepred.polaris_env.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
     DataStructDimension, Badges
 from deepred.polaris_env.map_dimensions import MapDimensions
+from deepred.polaris_env.map_warps import MapWarps, MapWarp
 from deepred.polaris_env.utils import cproperty
 
 B = 256
@@ -69,7 +70,7 @@ class GameState:
         self._ram = console.memory
         self._ram_helper = console._ram_helper
         self._frame = console._frame
-        self._visited_tiles = console.additional_memory.visited_tiles
+        self._additional_memory = console.additional_memory.visited_tiles
         self.screen = np.uint8(console.screen.ndarray[:, :, 0])
 
 
@@ -653,7 +654,7 @@ class GameState:
 
         visited_tiles_on_current_map[
         adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
-        ] = self._visited_tiles[self.map][top_left_y: bottom_right_y, top_left_x:bottom_right_x]
+        ] = self._additional_memory.visited_tiles[self.map][top_left_y: bottom_right_y, top_left_x:bottom_right_x]
 
         return visited_tiles_on_current_map
 
@@ -692,56 +693,49 @@ class GameState:
         return sprite_map
 
     @cproperty
-    def warp_map(self):
-        warp_map = np.zeros((9, 10), dtype=np.int8)
+    def warp_map(self) -> np.ndarray:
+        """
+        A map of visible warps.
+        # TODO: store somewhere that (9, 10) is the standard size of tilemaps.
+        """
+        warp_map = np.zeros((9, 10), dtype=np.uint8)
+        warps = MapWarps[self.map]
+        if len(warps) == 0:
+            return warp_map
 
-        warps = WARP_DICT[map_name]
-        if not warps:
-            return minimap_warp
-        x, y = self.current_coords
-        top_left_x = max(0, x - 4)
-        top_left_y = max(0, y - 4)
-        bottom_right_x = min(MAP_DICT[MAP_ID_REF[cur_map_id]]['width'], x + 5)
-        bottom_right_y = min(MAP_DICT[MAP_ID_REF[cur_map_id]]['height'], y + 4)
-        # patched warps, read again from ram
-        if cur_map_id in [0xCB, 0xEC]:  # ROCKET_HIDEOUT_ELEVATOR 0xCB, SIPLH_CO_ELEVATOR 0xEC
+        map_w, map_h = MapDimensions[self.map].shape
+        pos_x, pos_y = self.pos_x, self.pos_y
+
+        top_left_x = max(0, pos_x - 4)
+        top_left_y = max(0, pos_y - 4)
+        bottom_right_x = min(map_w, pos_x + 5)
+        bottom_right_y = min(map_h, pos_y + 4)
+
+        if self.map in [Map.ROCKET_HIDEOUT_ELEVATOR, Map.SILPH_CO_ELEVATOR]:
             warps = []
-            n_warps = self.read_ram_m(RAM.wNumberOfWarps)  # wNumberOfWarps
-            for i in range(n_warps):
-                warp_addr = RAM.wWarpEntries.value + i * 4
-                warp_y = self.read_m(warp_addr + 0)
-                warp_x = self.read_m(warp_addr + 1)
-                warp_warp_id = self.read_m(warp_addr + 2)
-                warp_map_id = self.read_m(warp_addr + 3)
-                if warp_map_id in [199, 200, 201, 202] and warp_map_id not in self.hideout_elevator_maps:
-                    self.hideout_elevator_maps.append(warp_map_id)
-                warps.append({
-                    'x': warp_x,
-                    'y': warp_y,
-                    'warp_id': warp_warp_id,
-                    'target_map_name': MAP_ID_REF[warp_map_id],
-                })
+            for i in range(self.num_warps):
+                warp_addr = RamLocation.WARP_ENTRIES + i * DataStructDimension.WARP
+                warp_y = self._read(warp_addr + 0)
+                warp_x = self._read(warp_addr + 1)
+                warp_id = self._read(warp_addr + 2)
+                warp_map_destination = Map(self._read(warp_addr + 3))
+
+                warps.append(MapWarp(x=warp_x, y=warp_y, id=warp_id, destination=warp_map_destination))
+
+                # TODO: See if this is used anywhere else ?
+                #if warp_map_id in [199, 200, 201, 202] and warp_map_id not in self._additional_memory.hideout_elevator_maps:
+                #    self.hideout_elevator_maps.append(warp_map_id)
 
         for warp in warps:
-            if warp['x'] >= top_left_x and warp['x'] <= bottom_right_x and warp['y'] >= top_left_y and warp['y'] <= bottom_right_y:
-                if warp['target_map_name'] != 'LAST_MAP':
-                    target_map_name = warp['target_map_name']
-                else:
-                    last_map_id = self.read_m(0xd365)  # wLastMap
-                    target_map_name = MAP_ID_REF[last_map_id]
-                warp_id = warp['warp_id'] - 1
-                warp_name = f'{target_map_name}@{warp_id}'
-                if warp_name in WARP_ID_DICT:
-                    actual_warp_id = WARP_ID_DICT[warp_name] + 1  # 0 is reserved for no warp / padding
-                else:
-                    actual_warp_id = 829
-                    # if warp_name not in ['ROUTE_22@1']:  # ignore expected bugged warps, workaround-ed
-                    if warp_name in ['SAFFRON_CITY@9']:  # ignore expected bugged warps, workaround-ed
-                        actual_warp_id = 828
-                    else:
-                        print(f'warp_name: {warp_name} not in WARP_ID_DICT')
-                minimap_warp[warp['y'] - top_left_y, warp['x'] - top_left_x] = actual_warp_id
-        return minimap_warp
+            if top_left_x <= warp.x <= bottom_right_x and top_left_y <= warp.y <= bottom_right_y:
+                # if warp.destination != Map.UNKNOWN:
+                #     destination = warp.destination
+                # else:
+                #     last_map_id = self._read(RamLocation.LAST_MAP)
+                #     destination = Map(last_map_id)
+
+                warp_map[warp.y - top_left_y, warp.x - top_left_x] = 1
+        return warp_map
 
     @cproperty
     def feature_maps(self) -> np.ndarray:
@@ -753,7 +747,7 @@ class GameState:
         4. water
         5. previously visited tiles
         """
-        maps = np.zeros((7, 9, 10), dtype=np.uint8)
+        maps = np.zeros((8, 9, 10), dtype=np.uint8)
         # TODO:
         #    clean up this function, we do not understand whats going on very well.
         #   - note: they do not update the count when player is warping ?
@@ -783,8 +777,8 @@ class GameState:
             # tree
             maps[1] = (bottom_left_screen_tiles == 80).astype(np.uint8)  # 0x50
 
-        # get seen_map obs
         maps[6] = self.visited_tiles
+        maps[7] = self.warp_map
 
         return maps
 

@@ -443,8 +443,14 @@ class PolarisRedObservationSpace:
         for observation_name, extractor in self.observations.items():
             output_file = dump_path.with_name(dump_path.stem + f"_{observation_name}")
             if isinstance(extractor, PixelsObservation):
-                image_file = output_file.with_suffix(".png")
-                Image.fromarray(observations[observation_name]).save(image_file)
+                pixels = observations[observation_name]
+                if len(pixels.shape()) == 3:
+                    for i, subpixels in enumerate(pixels):
+                        image_file = output_file.with_name(output_file.stem + f"_{i}").with_suffix(".png")
+                        Image.fromarray(subpixels).save(image_file)
+                else:
+                    image_file = output_file.with_suffix(".png")
+                    Image.fromarray(observations[observation_name]).save(image_file)
             elif isinstance(extractor, dict):
                 self.dump_observations(
                     dump_path.with_name(dump_path.stem + f"_{observation_name}"), extractor

@@ -17,11 +17,9 @@ class MapWarp(NamedTuple):
 for warp_name, warplist in WARP_DICT.items():
     string = f"Map.{warp_name}: ["
     for i, warpdict in enumerate(warplist):
-        string += f"MapWarp(x={warpdict['x']}, y={warpdict['y']}, id={warpdict['warp_id']}, destination=Map.{Map(warpdict['target_map_id']).name}),"
-    string = string[:-1]
+        string += f"    MapWarp(x={warpdict['x']}, y={warpdict['y']}, id={warpdict['warp_id']}, destination=Map.{Map(warpdict['target_map_id']).name}), "
     string += "], "
     print(string)
-
 
 MapWarps = {
 Map.AGATHAS_ROOM: [MapWarp(x=4, y=11, id=3, destination=Map.BRUNOS_ROOM), MapWarp(x=5, y=11, id=4, destination=Map.BRUNOS_ROOM), MapWarp(x=4, y=0, id=1, destination=Map.LANCES_ROOM), MapWarp(x=5, y=0, id=1, destination=Map.LANCES_ROOM)],
