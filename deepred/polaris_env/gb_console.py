@@ -8,8 +8,9 @@ from gymnasium.error import ResetNeeded
 from pyboy import PyBoy
 from pyboy.utils import WindowEvent
 from PIL import Image
-from deepred.polaris_env.action_space import PolarisRedActionSpace
+from deepred.polaris_env.action_space import PolarisRedActionSpace, CustomEvent
 from deepred.polaris_env.additional_memory import AdditionalMemory
+from deepred.polaris_env.battle_parser import parse_battle_state, BattleState
 from deepred.polaris_env.enums import StartMenuItem, EventFlag, BagItem, RamLocation
 from deepred.polaris_env.game_patching import AgentHelper, GamePatching
 from deepred.polaris_env.gamestate import GameState
@@ -230,9 +231,57 @@ class GBConsole(PyBoy):
 
         return True
 
-    def set_instant_speed(self):
-        if not self._gamestate.instant_text:
-            self.memory[RamLocation.wd730] = self.memory[RamLocation.wd730] | (1<<6)
+    def process_event(
+            self,
+            event: WindowEvent | CustomEvent
+    ):
+        if event == CustomEvent.ROLL_PARTY:
+            self.agent_helper.roll_party(gamestate=self._gamestate)
+            return
+
+        process_event = True
+        if self._gamestate.is_in_battle:
+            c = 0
+            while True:
+                c += 1
+                battle_state = parse_battle_state(self._gamestate)
+                if battle_state in (BattleState.NOT_IN_BATTLE, BattleState.ACTIONABLE):
+                    break
+                elif battle_state == BattleState.OTHER:
+                    self.run_action_on_emulator(4)
+                    process_event = False
+                elif battle_state == BattleState.SWITCH:
+                    self.agent_helper.switch(self._gamestate)
+                    self.run_action_on_emulator(4)
+                    process_event = False
+                elif battle_state.LEARN_MOVE:
+                    # force to learn the move
+                    self.run_action_on_emulator(4)
+                    process_event = False
+                elif battle_state.REPLACE_MOVE:
+                    self.agent_helper.learn_move(self._gamestate)
+
+                elif battle_state == BattleState.ABANDON_MOVE:
+                    # force to abandon the move
+                    self.run_action_on_emulator(4)
+                    process_event = False
+                elif battle_state == BattleState.NICKNAME:
+                    # auto decline nickname
+                    self.run_action_on_emulator(5)
+                    process_event = False
+
+                elif c >= 8:
+                    # break after some frames anyways
+                    break
+
+        else:
+            if self._gamestate.skippable_with_a_press:
+                self.run_action_on_emulator(4)
+                process_event = False
+
+        if process_event:
+            self.run_action_on_emulator(event)
+
 
     def handle_error(
             self,

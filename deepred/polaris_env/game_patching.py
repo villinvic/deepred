@@ -5,8 +5,9 @@ from typing import List, Tuple, Type
 import numpy as np
 from tensorflow.python.types.core import Callable
 
-from deepred.polaris_env.enums import RamLocation, DataStructDimension, Map, BagItem, EventFlag
+from deepred.polaris_env.enums import RamLocation, DataStructDimension, Map, BagItem, EventFlag, Move
 from deepred.polaris_env.gamestate import GameState
+from deepred.polaris_env.move_infos import MoveInfos
 
 
 # TODO:
@@ -115,6 +116,7 @@ def nerf_spinners_path(
                          Map.ROCKET_HIDEOUT_B3F, Map.ROCKET_HIDEOUT_B4F]:
         ram[RamLocation.SIMULATED_JOYPAD_INDEX] = 0
 
+
 def victory_road_patch(
         ram,
         gamestate: GameState
@@ -151,12 +153,9 @@ def elevator_patch(
             else (Map.ROCKET_HIDEOUT_B4F, 2)
 
     elif gamestate.map == Map.SILPH_CO_ELEVATOR:
-        # no key_card, lift exit warp = 5f
-        # have key_card, lift exit warp = 3f
-        # have key_card, cleared masterball event, = 1f?
         if BagItem.CARD_KEY not in gamestate.bag_items:
             warp_map, warp_id = (Map.SILPH_CO_5F, 2)
-        elif gamestate.event_flags[EventFlag.EVENT_GOT_MASTER_BALL]:
+        elif gamestate.event_flags[EventFlag.GOT_MASTER_BALL]:
             warp_map, warp_id = (Map.SILPH_CO_1F, 3)
         else:
             warp_map, warp_id = (Map.SILPH_CO_3F, 2)
@@ -168,6 +167,34 @@ def elevator_patch(
     ram[RamLocation.WARP_ENTRIES + 3] = warp_map
     ram[RamLocation.WARP_ENTRIES + 2 + DataStructDimension.WARP] = warp_id
     ram[RamLocation.WARP_ENTRIES + 3 + DataStructDimension.WARP] = warp_map
+
+def freshwater_trade_patch(
+        ram,
+        gamestate: GameState
+):
+    if gamestate.step == 1:
+        ram[0xD778] = set_bit(0xD778, 4)
+
+
+def seafoam_island_patch(
+            ram,
+            gamestate: GameState
+    ):
+        if gamestate.map not in (Map.SEAFOAM_ISLANDS_1F, Map.SEAFOAM_ISLANDS_B1F,
+                             Map.SEAFOAM_ISLANDS_B2F, Map.SEAFOAM_ISLANDS_B3F, Map.SEAFOAM_ISLANDS_B4F):
+            return
+
+        for address, bit in [
+            [0xD7E8, 6],
+            [0xD7E8, 7],
+            [0xD87F, 0],
+            [0xD87F, 1],
+            [0xD880, 0],
+            [0xD880, 1],
+            [0xD881, 0],
+            [0xD881, 1],
+        ]:
+            ram[address] = set_bit(address, bit)
 
 
 patches = {
@@ -230,7 +257,6 @@ class AgentHelper:
 
     def roll_party(
             self,
-            ram,
             gamestate: GameState
     ):
         """
@@ -247,6 +273,8 @@ class AgentHelper:
                 gamestate.open_menu
         ):
             return
+
+        ram = gamestate._ram
 
         stats_addresses = slice(
             RamLocation.PARTY_START,
@@ -292,6 +320,54 @@ class AgentHelper:
         ram[RamLocation.PARTY_0_ID + (gamestate.party_count - 1)] = slot_0["species"]
         ram[stats_addresses] = slot_0["stats"]
         ram[nickname_addresses] = slot_0["nickname"]
+
+    def switch(
+            self,
+            gamestate: GameState
+    ):
+        """
+        Skips the switch confirmation menu
+        """
+        if gamestate.menu_item_id != 0:
+            gamestate._ram[RamLocation.MENU_ITEM_ID] = 0
+
+
+    def learn_move(
+            self,
+            gamestate: GameState
+    ) -> bool:
+        """
+        We automatically replace weaker moves
+        :return Whether we should learn or not the move.
+        """
+        # TODO: we should move some of this to the gamestate class.
+
+        moves = [Move(gamestate._read(RamLocation.WHICH_POKEMON_LEARNED_MOVES + i)) for i in range(4)]
+        party_pos = gamestate._read(RamLocation.WHICH_POKEMON)
+        # 2 types per pokemon
+        ptypes = [gamestate._read(RamLocation.PARTY_0_TYPE0 + (party_pos * 44) + i) for i in range(2)]
+
+        move_powers = []
+        for move in moves:
+            move_info = MoveInfos[move]
+            multiplier = 1
+            if move_info.type_id in ptypes and move_info.raw_power > 0:
+                multiplier += 0.5
+            move_powers.append(move_info.power * multiplier)
+
+        new_move = Move(gamestate._read(RamLocation.MOVE_TO_LEARN))
+        new_move_info = MoveInfos[new_move]
+        multiplier = 1
+        if new_move_info.type_id in ptypes and new_move_info.raw_power > 0:
+            multiplier += 0.5
+        new_move_power = new_move_info.power * multiplier
+
+        if new_move_power > min(move_powers):
+            gamestate._ram[RamLocation.MENU_ITEM_ID] = np.argmin(move_powers)
+            return True
+        else:
+            # do not replace, press B
+            return False
 
 
     '''

@@ -44,6 +44,18 @@ class VisitedTiles(AdditionalMemoryBlock):
         uint8_flag_count = round(255 * gamestate.event_flag_count / len(EventFlag))
         self.visited_tiles[gamestate.map][gamestate.pos_x, gamestate.pos_y] = uint8_flag_count
 
+    def get(
+            self,
+            gamestate: GameState
+    ):
+        """
+        recent visited tiles are set to 255, decrementing to 0 for each event that was triggered since the visit to the
+        tile.
+        """
+        uint8_flag_count = round(255 * gamestate.event_flag_count / len(EventFlag))
+        return 255 - (uint8_flag_count - self.visited_tiles[gamestate.map])
+
+
 
 class PokecenterCheckpoints(AdditionalMemoryBlock):
 
@@ -63,11 +75,41 @@ class PokecenterCheckpoints(AdditionalMemoryBlock):
         self.registered_checkpoints[self.pokecenter_ids.index(last_checkpoint)] = 1
 
 
+class FlagHistory(AdditionalMemoryBlock):
+
+    def __init__(
+            self,
+            flag_history_length: int = 16
+    ):
+        """
+        They block some maps.
+        """
+        self.flag_history = [0] * flag_history_length
+        self.stepstamps = [0] * flag_history_length
+
+        self._previous_event_flags = None
+
+
+    def update(
+            self,
+            gamestate: GameState
+    ):
+        if self._previous_event_flags is not None:
+            new_events = np.argwhere(gamestate.event_flags-self._previous_event_flags == 1)
+            for new_event in new_events:
+                self.flag_history.pop(0)
+                self.flag_history.append(new_event)
+                self.stepstamps.pop(0)
+                self.stepstamps.append(gamestate.step)
+
+        self._previous_event_flags = gamestate.event_flags
+
+
 class MapHistory(AdditionalMemoryBlock):
 
     def __init__(
             self,
-            map_history_length: int = 10
+            map_history_length: int = 10,
     ):
         """
         Keeps track of the latest maps visited.
@@ -88,12 +130,12 @@ class MapHistory(AdditionalMemoryBlock):
         self.map_history.append(gamestate.map)
 
 
-
 class AdditionalMemory(AdditionalMemoryBlock):
 
     def __init__(
             self,
             map_history_length: int = 10,
+            flag_history_length: int = 16
 
     ):
         """
@@ -104,9 +146,10 @@ class AdditionalMemory(AdditionalMemoryBlock):
 
         self.visited_tiles = VisitedTiles()
         self.pokecenter_checkpoints = PokecenterCheckpoints()
-        self.map_history = MapHistory()
+        self.map_history = MapHistory(map_history_length)
+        self.flag_history = FlagHistory(flag_history_length)
 
-        self.blocks = [self.visited_tiles, self.pokecenter_checkpoints]
+        self.blocks = [self.visited_tiles, self.pokecenter_checkpoints, self.map_history, self.flag_history]
 
     def update(
             self,

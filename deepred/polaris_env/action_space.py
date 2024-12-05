@@ -1,4 +1,5 @@
 import time
+from enum import IntEnum
 
 from pyboy.utils import WindowEvent
 from gymnasium.spaces import Discrete
@@ -6,18 +7,24 @@ from gymnasium.spaces import Discrete
 import sys
 import select
 
+
+class CustomEvent(IntEnum):
+    ROLL_PARTY = 0
+
 class PolarisRedActionSpace:
 
     def __init__(
             self,
             enable_start: bool = True,
-            enable_pass: bool = False
+            enable_pass: bool = False,
+            enable_roll_party: bool = True,
     ):
         """
         Represents the action space, as the interface between the bot and the GameBoy console.
         :param enable_start: Whether to enable the button start (can speed up learning, but may prevent learning some
         interesting behavior, such as swapping pokemons)
-        :param enable_pass: Whether to enable the no-op action (no button is pressed)
+        :param enable_pass: Whether to enable the no-op action (no button is pressed).
+        :param enable_roll_party: Whether to enable the automated roll party action.
         """
 
         actions = [
@@ -32,6 +39,8 @@ class PolarisRedActionSpace:
             actions.append(WindowEvent.PRESS_BUTTON_START)
         if enable_pass:
             actions.append(WindowEvent.PASS)
+        if enable_swap:
+            actions.append(CustomEvent.ROLL_PARTY)
 
         self.actions = actions
         self.gym_spec = Discrete(len(self.actions))
@@ -44,7 +53,8 @@ class PolarisRedActionSpace:
             "": 4,
             "0": 5,
             "5": 6,
-            "6": 7
+            "6": 7,
+            "7": 8,
         }
 
     def get_event(

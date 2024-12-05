@@ -7,8 +7,9 @@ from PIL import Image
 from pyboy import PyBoy
 from tensorflow.python.keras.backend import dtype
 
+from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
-    DataStructDimension, Badges, BattleType
+    DataStructDimension, Badges, BattleType, ProgressionFlag
 from deepred.polaris_env.map_dimensions import MapDimensions
 from deepred.polaris_env.map_warps import MapWarps, MapWarp, NamedWarpIds
 from deepred.polaris_env.utils import cproperty
@@ -17,7 +18,7 @@ B = 256
 B2 = B**2
 
 EVENT_ADDRESS_ARRAY = np.array([
-    e.value for e in EventFlag
+    e.value for e in ProgressionFlag
 ])
 
 class GameState:
@@ -58,7 +59,6 @@ class GameState:
                     value = getattr(self, name, None)
                     f.write(f"{name}: {value}\n")
 
-
     def __init__(
             self,
             console: "GBConsole"
@@ -72,7 +72,7 @@ class GameState:
         self._ram_helper = console._ram_helper
         self._frame = console._frame
         self.step = console.step
-        self._additional_memory = console.additional_memory.visited_tiles
+        self._additional_memory: AdditionalMemory = console.additional_memory
         self.screen = np.uint8(console.screen.ndarray[:, :, 0])
 
 
@@ -111,6 +111,21 @@ class GameState:
         """
         # TODO: update this
         return self.is_playing_party_animations > 0
+
+    @cproperty
+    def skippable_with_a_press(self):
+        """
+        Normally, with modded rom, should not need this.
+        """
+        return (
+                self._read(0xc4f2) == 238
+                and
+                self._read(RamLocation.MENU_STATE) == 0
+                and
+                self.textbox_id == 1
+                and
+                self.hdst_map != 0
+        )
 
     @cproperty
     def is_in_battle(self) -> bool:
@@ -279,10 +294,18 @@ class GameState:
     @cproperty
     def battle_type(self) -> BattleType:
         """
-        :return: True if in battle
+        :return: type of battle, not in battle, wild, trainer.
         """
         # Battle type is 0 when not in battle.
         return BattleType(self._read(RamLocation.BATTLE_TYPE))
+
+    @cproperty
+    def battle_kind(self) -> int:
+        """
+        :return: kind of battle, not in battle, gym leader, safari, etc.
+        """
+        # Battle type is 0 when not in battle.
+        return BattleType(self._read(RamLocation.BATTLE_KIND))
 
     @cproperty
     def player_money(self) -> int:
@@ -467,7 +490,7 @@ class GameState:
             wild_pokemon: bool = False # TODO: never used ?
     ) -> List:
         """
-        Returns a list of pokemon attributes (14) for party pokemons, or opponent pokemons that are not battling.
+        Returns a list of pokemon attributes (15) for party pokemons, or opponent pokemons that are not battling.
         TODO: think if we move this kind of function into the observation space module...
         TODO: Add one hot for pokemon position.
         :param start_address: starting address of the concerned pokemon.
@@ -476,15 +499,17 @@ class GameState:
         :param wild_pokemon: is it a wild pokemon ?
         """
         hp = self._read_double(start_address + 1) / 250
+        max_hp =self._read_double(start_address + 34) / 250
         return [
             hp,  # current hp
+            int(hp > 0),  # knocked out ?
+            hp / max_hp,
+            max_hp,
             self._read(start_address + 33) / 100, # levels
-            self._read_double(start_address + 34) / 250, # max hp
             self._read_double(start_address + 36) / 134, # attack
             self._read_double(start_address + 38) / 180,  # defense
             self._read_double(start_address + 40) / 140,  # speed
             self._read_double(start_address + 42) / 154,  # special
-            int(hp > 0), # knocked out ?
             int(wild_pokemon or (
                 (party_pokemon and position == self._read(RamLocation.PARTY_SENT_OUT))
                 or
@@ -501,7 +526,7 @@ class GameState:
             wild_pokemon: bool = False
     ) -> List:
         """
-        Returns a list of pokemon attributes for battling opponent pokemons
+        Returns a list of pokemon attributes (15) for battling opponent pokemons
         # TODO: think if we move this kind of function into the observation space module...
         :param start_address: starting address of the concerned pokemon.
         :param party_pokemon: is it a pokemon from our party ?
@@ -509,11 +534,13 @@ class GameState:
         :param wild_pokemon: is it a wild pokemon ?
         """
         hp = self._read_double(start_address + 1) / 250
+        max_hp = self._read_double(start_address + 15) / 250 # max hp
         return [
             hp,  # current hp
             int(hp > 0),  # knocked out ?
+            hp / max_hp,
+            max_hp,  # max hp
             self._read(start_address + 14) / 100, # levels
-            self._read_double(start_address + 15) / 250, # max hp
             self._read_double(start_address + 17) / 134, # attack
             self._read_double(start_address + 19) / 180,  # defense
             self._read_double(start_address + 21) / 140,  # speed
@@ -524,11 +551,11 @@ class GameState:
 
     def pokemon_attributes(self) -> np.ndarray:
         """
-        An array of shape (12, 14) holding attributes for all pokemons.
+        An array of shape (12, 15) holding attributes for all pokemons.
         I feel like having every info about the opponent team is kind of cheating, but again, you can also cheat
         by checking the game online I guess.
         """
-        attributes = np.zeros((12, 14), np.float32)
+        attributes = np.zeros((12, 15), np.float32)
 
         for i in range(self.party_count):
             attributes[i] = self.party_pokemon_obs(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS,
@@ -605,38 +632,42 @@ class GameState:
         return self._read(RamLocation.OPEN_START_MENU) == 1
 
     @cproperty
+    def menu_item_id(self) -> int:
+        """
+        Current id of the highlighted menu item
+        """
+        return self._read(RamLocation.MENU_ITEM_ID)
+
+
+    @cproperty
     def start_menu_item(self) -> StartMenuItem:
         """
         :return: Start item currently selected, returns unselected if the menu is not open.
         """
-        # correct_cursor_cords = self.item_cursor_x, self.item_cursor_y == (2, 11)
-        # dialog_state = self._read(RamLocation.DIALOG_STATE)
-        # start_menu_open = (self.map == Map.REDS_HOUSE_SECOND_FLOOR and dialog_state == 8) or dialog_state ==  113
-        # TODO: needs another check for which menu we are in exactly, cursor does not reset after closing the menu
-        #if self.open_text_box and correct_cursor_cords and start_menu_open:
+
         if self.open_start_menu:
-            return StartMenuItem(self._read(RamLocation.MENU_ITEM_ID))
+            return StartMenuItem(self.menu_item_id)
 
         return StartMenuItem.UNSELECTED
 
-    @cproperty
-    def party_hp(self) -> List[float]:
-        """
-        The current party pokemon health fractions (0 is fainted, 1 is full hp).
-        # TODO: handle pokemon indices between game and battles (they use different rams)
-        # https://datacrystal.tcrf.net/wiki/Pok%C3%A9mon_Red_and_Blue/RAM_map#Battle_2
-        """
-        return [ self._read_double(curr_hp_addr) / (self._read_double(max_hp_addr) + 1e-8)
-        # Addresses are not adjacent.
-        for curr_hp_addr, max_hp_addr in [
-                     (RamLocation.PARTY_0_HP, RamLocation.PARTY_0_MAXHP),
-                     (RamLocation.PARTY_1_HP, RamLocation.PARTY_1_MAXHP),
-                     (RamLocation.PARTY_2_HP, RamLocation.PARTY_2_MAXHP),
-                     (RamLocation.PARTY_3_HP, RamLocation.PARTY_3_MAXHP),
-                     (RamLocation.PARTY_4_HP, RamLocation.PARTY_4_MAXHP),
-                     (RamLocation.PARTY_5_HP, RamLocation.PARTY_5_MAXHP),
-                 ]
-        ]
+    # @cproperty
+    # def party_hp(self) -> List[float]:
+    #     """
+    #     The current party pokemon health fractions (0 is fainted, 1 is full hp).
+    #     # TODO: handle pokemon indices between game and battles (they use different rams)
+    #     # https://datacrystal.tcrf.net/wiki/Pok%C3%A9mon_Red_and_Blue/RAM_map#Battle_2
+    #     """
+    #     return [ self._read_double(curr_hp_addr) / (self._read_double(max_hp_addr) + 1e-8)
+    #     # Addresses are not adjacent.
+    #     for curr_hp_addr, max_hp_addr in [
+    #                  (RamLocation.PARTY_0_HP, RamLocation.PARTY_0_MAXHP),
+    #                  (RamLocation.PARTY_1_HP, RamLocation.PARTY_1_MAXHP),
+    #                  (RamLocation.PARTY_2_HP, RamLocation.PARTY_2_MAXHP),
+    #                  (RamLocation.PARTY_3_HP, RamLocation.PARTY_3_MAXHP),
+    #                  (RamLocation.PARTY_4_HP, RamLocation.PARTY_4_MAXHP),
+    #                  (RamLocation.PARTY_5_HP, RamLocation.PARTY_5_MAXHP),
+    #              ]
+    #     ]
 
     @cproperty
     def party_experience(self) -> List[float]:
@@ -703,6 +734,7 @@ class GameState:
         """
         Returns the array of flag bits.
         """
+        # TODO: check if we can handle this faster.
         event_bytes = np.array(self._read(slice(RamLocation.EVENT_START, RamLocation.EVENT_END, 1)), dtype=np.uint8)
         return np.unpackbits(event_bytes, bitorder="little")[EVENT_ADDRESS_ARRAY]
 
@@ -893,7 +925,7 @@ class GameState:
 
         visited_tiles_on_current_map[
         adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
-        ] = self._additional_memory.visited_tiles[self.map][top_left_y: bottom_right_y, top_left_x:bottom_right_x]
+        ] = self._additional_memory.visited_tiles.get(self)[top_left_y: bottom_right_y, top_left_x:bottom_right_x]
 
         return visited_tiles_on_current_map
 
@@ -912,7 +944,7 @@ class GameState:
                 continue
             sprite_map[s.y // 16, s.x // 16] = (s.tiles[0].tile_identifier + 1) / 4
 
-        if self.map == Map.VERMILION_GYM and self.event_flags[EventFlag.EVENT_2ND_LOCK_OPENED] == 0:
+        if self.map == Map.VERMILION_GYM and self.event_flags[EventFlag.SECOND_LOCK_OPENED] == 0:
             trashcans_coords = [
                 (1, 7), (1, 9), (1, 11),
                 (3, 7), (3, 9), (3, 11),
@@ -921,7 +953,7 @@ class GameState:
                 (9, 7), (9, 9), (9, 11),
             ]
             can = self._read(RamLocation.SECOND_LOCK_TRASH_CAN) \
-                if (self.event_flags[EventFlag.EVENT_1ST_LOCK_OPENED] == 1) \
+                if (self.event_flags[EventFlag.FIRST_LOCK_OPENED] == 1) \
                 else self._read(RamLocation.FIRST_LOCK_TRASH_CAN)
             assign_new_sprite_in_sprite_minimap(sprite_map, 384, *trashcans_coords[can])
 
@@ -961,7 +993,7 @@ class GameState:
 
                 warps.append(MapWarp(x=warp_x, y=warp_y, id=warp_id, destination=warp_map_destination))
 
-                # TODO: See if this is used anywhere else ?
+                # TODO: This seem to be used in rewards.
                 #if warp_map_id in [199, 200, 201, 202] and warp_map_id not in self._additional_memory.hideout_elevator_maps:
                 #    self.hideout_elevator_maps.append(warp_map_id)
 
