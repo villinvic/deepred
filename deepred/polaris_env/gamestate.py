@@ -1,17 +1,14 @@
-from collections import defaultdict
 from pathlib import Path
 from typing import Union, List, Dict
 
 import numpy as np
 from PIL import Image
-from pyboy import PyBoy
-from tensorflow.python.keras.backend import dtype
 
 from deepred.polaris_env.additional_memory import AdditionalMemory
-from deepred.polaris_env.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
+from deepred.polaris_env.pokemon_red.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
     DataStructDimension, Badges, BattleType, ProgressionFlag
-from deepred.polaris_env.map_dimensions import MapDimensions
-from deepred.polaris_env.map_warps import MapWarps, MapWarp, NamedWarpIds
+from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
+from deepred.polaris_env.pokemon_red.map_warps import MapWarps, MapWarp, NamedWarpIds
 from deepred.polaris_env.utils import cproperty
 
 B = 256
@@ -160,6 +157,7 @@ class GameState:
 
         return (max_color - min_color) < 20
 
+    @cproperty
     def is_at_pokecenter(self) -> bool:
         """
         :return: True if we are at a pokecenter.
@@ -172,6 +170,7 @@ class GameState:
             Map.INDIGO_PLATEAU_LOBBY
         ]
 
+    @cproperty
     def is_at_pokemart(self) -> bool:
         """
         :return: True if we are at a pokemart.

@@ -1,8 +1,8 @@
 import numpy as np
 
-from deepred.polaris_env.enums import EventFlag, Map
+from deepred.polaris_env.pokemon_red.enums import EventFlag, Map
 from deepred.polaris_env.gamestate import GameState
-from deepred.polaris_env.map_dimensions import MapDimensions
+from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
 
 class AdditionalMemoryBlock:

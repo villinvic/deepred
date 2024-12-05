@@ -1,6 +1,6 @@
 import time
 
-from deepred.polaris_env.enums import Map
+from deepred.polaris_env.pokemon_red.enums import Map
 from deepred.polaris_utils.counting import hash_function
 import numpy as np
 

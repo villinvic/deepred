@@ -10,9 +10,9 @@ import tree
 from PIL import Image
 from gymnasium import spaces
 from gymnasium.spaces import Box
-from deepred.polaris_env.enums import Map, EventFlag, BagItem, ProgressionEvents
+from deepred.polaris_env.pokemon_red.enums import Map, BagItem, ProgressionEvents
 from deepred.polaris_env.gamestate import GameState
-from deepred.polaris_env.map_dimensions import MapDimensions
+from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
 
 class ObsType(Enum):

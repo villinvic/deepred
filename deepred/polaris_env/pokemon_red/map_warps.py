@@ -2,7 +2,7 @@ from typing import List
 
 from typing_extensions import NamedTuple
 
-from deepred.polaris_env.enums import Map
+from deepred.polaris_env.pokemon_red.enums import Map
 
 
 class MapWarp:

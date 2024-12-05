@@ -1,20 +1,17 @@
-from collections import defaultdict
 from pathlib import Path
 from typing import Union, Tuple
 
 import mediapy
-import numpy as np
 from gymnasium.error import ResetNeeded
 from pyboy import PyBoy
 from pyboy.utils import WindowEvent
-from PIL import Image
-from deepred.polaris_env.action_space import PolarisRedActionSpace, CustomEvent
+from deepred.polaris_env.action_space import CustomEvent
 from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.battle_parser import parse_battle_state, BattleState
-from deepred.polaris_env.enums import StartMenuItem, EventFlag, BagItem, RamLocation
-from deepred.polaris_env.game_patching import AgentHelper, GamePatching
+from deepred.polaris_env.pokemon_red.enums import StartMenuItem
+from deepred.polaris_env.game_patching import GamePatching
+from deepred.polaris_env.agent_helper import AgentHelper
 from deepred.polaris_env.gamestate import GameState
-from deepred.polaris_env.observation_space import PolarisRedObservationSpace
 
 RELEASE_EVENTS = {
     WindowEvent.PRESS_ARROW_DOWN: WindowEvent.RELEASE_ARROW_DOWN,
@@ -69,7 +66,7 @@ class GBConsole(PyBoy):
         self.agent_helper = AgentHelper()
 
         self.render = render
-        self.min_frame_skip = 20
+        self.min_frame_skip = 20  # 24 (seems unnecessarily large ?)
         self.set_emulation_speed(speed_limit if render else 0)
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
@@ -149,10 +146,9 @@ class GBConsole(PyBoy):
             return self._gamestate
         self.invalid_count = 0
 
-
         # In order for actions to be stateless, we need to send it for 8 frames.
         self.send_input(event)
-        self.tick(8)
+        self.tick(8, render=self.render and self.record_skipped_frames)
         if event != WindowEvent.PASS:
             self.send_input(RELEASE_EVENTS[event])
 
@@ -231,57 +227,103 @@ class GBConsole(PyBoy):
 
         return True
 
+    def handle_world_events(
+            self,
+            event: WindowEvent
+    ) -> bool:
+        """
+        Handles bot inputs when not in battle.
+        Returns if we are waiting for an input of the bot.
+        """
+        finalise = True
+
+        if self._gamestate.skippable_with_a_press:
+            self.step_event(WindowEvent.PRESS_BUTTON_A)
+            return False
+
+        if event == WindowEvent.PRESS_BUTTON_A:
+            if self._gamestate.is_at_pokemart:
+                self.agent_helper.buy()
+            # sell
+
+        if self._gamestate.is_at_pokemart and action == 4:
+            can_buy = self.scripted_buy_items()
+            if can_buy:
+                action = self.noop_button_index
+
+                # press button then release after some steps
+                if not emulated:
+                    if action == 4:
+                        self.scripted_routine_flute(action)
+                        self.scripted_routine_cut(action)
+                        self.scripted_routine_surf(action)
+                        action = self.scripted_manage_party(action)
+                    self.pyboy.send_input(self.valid_actions[action])
+                else:
+                    self.pyboy.send_input(emulated)
+
+    def handle_battle_inputs(self) -> bool:
+        """
+        Handles bot inputs when in battle.
+        Returns if we are waiting for an input of the bot.
+        """
+        c = 0
+        finalise = True
+        while True:
+            c += 1
+            battle_state = parse_battle_state(self._gamestate)
+            if battle_state in (BattleState.NOT_IN_BATTLE, BattleState.ACTIONABLE):
+                break
+            elif battle_state == BattleState.OTHER:
+                self.step_event(WindowEvent.PRESS_BUTTON_A)
+                finalise = False
+            elif battle_state == BattleState.SWITCH:
+                self.agent_helper.switch(self._gamestate)
+                self.step_event(WindowEvent.PRESS_BUTTON_A)
+                finalise = False
+            elif battle_state == BattleState.LEARN_MOVE:
+                # force to learn the move
+                self.step_event(WindowEvent.PRESS_BUTTON_A)
+                finalise = False
+            elif battle_state == BattleState.REPLACE_MOVE:
+                is_learning_move = self.agent_helper.learn_move(self._gamestate)
+                if is_learning_move:
+                    self.step_event(WindowEvent.PRESS_BUTTON_A)
+                else:
+                    self.step_event(WindowEvent.PRESS_BUTTON_B)
+                finalise = False
+            elif battle_state == BattleState.ABANDON_MOVE:
+                # force to abandon the move
+                self.step_event(WindowEvent.PRESS_BUTTON_A)
+                finalise = False
+            elif battle_state == BattleState.NICKNAME:
+                # auto decline nickname
+                self.step_event(WindowEvent.PRESS_BUTTON_B)
+                finalise = False
+
+            elif c >= 8:
+                # break after some frames anyways
+                break
+        return finalise
+
     def process_event(
             self,
             event: WindowEvent | CustomEvent
     ):
+        # TODO: clean up
+
         if event == CustomEvent.ROLL_PARTY:
             self.agent_helper.roll_party(gamestate=self._gamestate)
             return
 
         process_event = True
         if self._gamestate.is_in_battle:
-            c = 0
-            while True:
-                c += 1
-                battle_state = parse_battle_state(self._gamestate)
-                if battle_state in (BattleState.NOT_IN_BATTLE, BattleState.ACTIONABLE):
-                    break
-                elif battle_state == BattleState.OTHER:
-                    self.run_action_on_emulator(4)
-                    process_event = False
-                elif battle_state == BattleState.SWITCH:
-                    self.agent_helper.switch(self._gamestate)
-                    self.run_action_on_emulator(4)
-                    process_event = False
-                elif battle_state.LEARN_MOVE:
-                    # force to learn the move
-                    self.run_action_on_emulator(4)
-                    process_event = False
-                elif battle_state.REPLACE_MOVE:
-                    self.agent_helper.learn_move(self._gamestate)
-
-                elif battle_state == BattleState.ABANDON_MOVE:
-                    # force to abandon the move
-                    self.run_action_on_emulator(4)
-                    process_event = False
-                elif battle_state == BattleState.NICKNAME:
-                    # auto decline nickname
-                    self.run_action_on_emulator(5)
-                    process_event = False
-
-                elif c >= 8:
-                    # break after some frames anyways
-                    break
-
+            finalise = self.handle_battle_inputs()
         else:
-            if self._gamestate.skippable_with_a_press:
-                self.run_action_on_emulator(4)
-                process_event = False
+            finalise = self.handle_world_inputs()
 
-        if process_event:
-            self.run_action_on_emulator(event)
-
+        if finalise:
+            self.step_event(event)
 
     def handle_error(
             self,

@@ -1,11 +1,10 @@
 from collections import defaultdict
-from typing import Tuple, Union
+from typing import Union
 
 import numpy as np
 
-from deepred.polaris_env.enums import Pokemon
+from deepred.polaris_env.pokemon_red.enums import Pokemon
 from deepred.polaris_env.gamestate import GameState
-from deepred.polaris_env.rewards import Goals, accumulate_goal_stats
 from deepred.polaris_utils.counting import hash_function
 
 

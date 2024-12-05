@@ -1,4 +1,4 @@
-from deepred.polaris_env.enums import BagItem
+from deepred.polaris_env.pokemon_red.enums import BagItem
 from deepred.polaris_env.polaris_red import PolarisRed
 from deepred.polaris_env.rewards import Goals
 from deepred.polaris_utils.counting import HashScales
