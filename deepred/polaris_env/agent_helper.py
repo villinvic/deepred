@@ -1,11 +1,13 @@
-from typing import Dict, List
+from typing import Dict, List, Callable
 
 import numpy as np
+from pyboy.utils import WindowEvent
 
 from deepred.polaris_env.game_patching import set_player_money, to_double
 from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.pokemon_red.bag_item_info import BagItemsInfo, BagItemInfo
-from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, Move, BagItem, Map, Pokemon
+from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, Move, BagItem, Map, Pokemon, \
+    TileSet, Orientation
 from deepred.polaris_env.pokemon_red.move_info import MovesInfo
 from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats, PokemonBaseStats
 
@@ -201,43 +203,65 @@ class AgentHelper:
     def manage_party(
             self,
             gamestate: GameState
-    ) -> bool:
+    ):
         """
-           Moves the lowest total stats pokemon in the party with the highest stats pokemon in the box.
+       Moves the lowest total stats pokemon in the party with the highest stats pokemon in the box.
 
-           If the party is not full, just add the best pokemon.
-           If the box is empty, do nothing.
+       The party should be full and there should be pokemons in the box if we call this function.
+        """
+        # We scale pokemons to the same level, this allows us to pick pokemons with better basestats and ivs.
+        scale_level = 50
 
-           Returns if we interacted with the pc or not.
-
-           TODO: as we will need the info at all time, we should keep in memory the box pokemons somehow.
-                -> we need an observation telling us there is good pokemons in the box.
-           """
         ram = gamestate._ram
         box_count = gamestate.box_pokemon_count
 
         box_pokemons = extract_box_pokemon_stats(gamestate)
-        box_stat_sums = [box_pokemon.scale(50).sum() for box_pokemon in box_pokemons]
+        box_stat_sums = [box_pokemon.scale(level=scale_level).sum() for box_pokemon in box_pokemons]
         best_box_pokemon = np.argmax(box_stat_sums)
-        # If our party is not full, just move the best box pokemon into our party
-        if gamestate.box_pokemon_count < 6:
-            return send_box_pokemon_to_party(
-
-                best_box_pokemon
-            )
 
         party_stat_sums = []
         for i in range(gamestate.party_count):
-            pass
-
-        party_stat_sums = []
+            level = gamestate._read(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 33)
+            hp = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 34)
+            attack = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 36)
+            defense = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 38)
+            speed = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 40)
+            special = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 42)
+            party_stat_sums.append(
+                PokemonBaseStats(hp=hp, attack=attack, defense=defense, speed=speed, special=special).rescale_as(
+                    original_level=level, target_level=scale_level
+                ).sum()
+            )
         worst_party_pokemon = np.argmin(party_stat_sums)
 
         if party_stat_sums[worst_party_pokemon] > box_stat_sums[best_box_pokemon]:
-            # We found a pokemon that is worse that our team in the box, just release worst pokemons.
-            return release_weak_pokemons(box_stat_sums, stat_sum_threshold=party_stat_sums[worst_party_pokemon])
+            box_count = release_weak_pokemons(
+                gamestate._ram,
+                box_count,
+                box_stat_sums,
+                threshold=party_stat_sums[worst_party_pokemon]
+            )
+        else:
+            box_count = send_box_pokemon_to_party(
+                ram,
+                box_pokemons[best_box_pokemon],
+                best_box_pokemon,
+                worst_party_pokemon,
+                box_count
+            )
 
-        ram[RamLocation.BOX_POKEMON_COUNT] = new_boxcount
+        ram[RamLocation.BOX_POKEMON_COUNT] = box_count
+
+    def field_move(
+            self,
+            gamestate: GameState,
+            step_func: Callable[[WindowEvent], None],
+    ):
+        # This needs to interact with the emulator back and forth
+        # Pass the step function.
+        use_flute(gamestate, step_func)
+        use_cut(action, step_func)
+        use_surf(action, step_func)
 
 
 def sell_useless_items(
@@ -412,12 +436,22 @@ def send_box_pokemon_to_party(
 
 
 def release_weak_pokemons(
+        ram,
+        box_count: int,
         box_pokemon_stat_sums: List[int],
         threshold: int,
 ) -> int:
     """
-
+    releases all pokemons weaker than given threshold
     """
+    for i in range(len(box_pokemon_stat_sums) - 1, 0, -1):
+        if box_pokemon_stat_sums[i] <= threshold:
+            box_count = delete_pokemon_box_at_index(
+                ram,
+                box_count,
+                i
+            )
+    return box_count
 
 
 def delete_pokemon_box_at_index(
@@ -456,137 +490,33 @@ def delete_pokemon_box_at_index(
     return new_boxcount
 
 
-    '''
-def party_stat_sum():
-    pass
-
-def box_stat_sum():
-    pass
-
-def move_best_box_pokemon_to_party(
-        ram,
-        gamestate: GameState
+def use_flute(
+        gamestate: GameState,
+        step_func: Callable[[WindowEvent], None]
 ):
-    """
-    Moves the lowest total stats pokemon in the party with the highest stats pokemon in the box.
-
-    If the party is not full, just add the best pokemon.
-    If the box is empty, do nothing.
-    """
-    # if no pokemon in box, do nothing
-    if gamestate.box_pokemon_count == 0:
+    if not gamestate.can_use_flute or gamestate.tileset_id != TileSet.OVERWORLD:
         return
 
-    box_stat_sums = []
-    best_box_pokemon = np.argmax(box_stat_sums)
-    # If our party is not full, just move the best box pokemon into our party
-    if gamestate.box_pokemon_count < 6:
-        return move_box_pokemon_to_party(best_box_pokemon)
-
-    party_stat_sums = []
-    worst_party_pokemon = np.argmin(party_stat_sums)
-
-    if party_stat_sums[worst_party_pokemon] > box_stat_sums[best_box_pokemon]:
-        # We found a pokemon that is worse that our team in the box, just release worst pokemons.
-        return release_weak_pokemons(stat_sum_threshold=party_stat_sums[worst_party_pokemon])
-
-    # box pokemon
-    box_stats_dict = {}
-    index = highest_box_level_idx
-
-    lowest_party_species = self.read_m(party_species_addr_start + lowest_party_level_idx)
-    highest_box_species = self.read_m(box_species_addr_start + highest_box_level_idx)
-    if lowest_party_species in ID_TO_SPECIES and highest_box_species in ID_TO_SPECIES:
-        print(
-            f'\nSwapping pokemon {ID_TO_SPECIES[lowest_party_species]} lv {lowest_party_level} with {ID_TO_SPECIES[highest_box_species]} lv {highest_box_level}')
-    else:
-        print(
-            f'\nSwapping pokemon {lowest_party_species} lv {lowest_party_level} with {highest_box_species} lv {highest_box_level}')
-    self.use_pc_swap_count += 1
-    # calculate box pokemon stats
-    box_stats_dict = self.calculate_pokemon_stats(box_stats_dict)
-
-    # swap party pokemon with box pokemon
-    # copy species
-    self.pyboy.set_memory_value(party_species_addr_start + lowest_party_level_idx,
-                                self.read_m(box_species_addr_start + highest_box_level_idx))
-
-    # copy all 0 to 33 from box to party
-    for i in range(33):
-        self.pyboy.set_memory_value(party_addr_start + lowest_party_level_idx * 44 + i,
-                                    self.read_m(box_mon_addr_start + highest_box_level_idx * 33 + i))
-        if i == 3:
-            # copy level from box to party
-            self.pyboy.set_memory_value(party_addr_start + lowest_party_level_idx * 44 + 33,
-                                        self.read_m(box_mon_addr_start + highest_box_level_idx * 33 + 3))
-
-    # copy the remaining stats from box to party
-    # max_hp, atk, def, spd, spc
-    box_stats = [box_stats_dict['max_hp'], box_stats_dict['atk'], box_stats_dict['def'], box_stats_dict['spd'],
-                 box_stats_dict['spc']]
-    for i in range(5):
-        # these stats are splitted into 2 bytes
-        # first byte is the higher byte, second byte is the lower byte
-        self.pyboy.set_memory_value(party_addr_start + lowest_party_level_idx * 44 + 34 + i * 2, box_stats[i] >> 8)
-        self.pyboy.set_memory_value(party_addr_start + lowest_party_level_idx * 44 + 35 + i * 2,
-                                    box_stats[i] & 0xFF)
-
-    # copy nickname
-    for i in range(11):
-        self.pyboy.set_memory_value(party_nicknames_addr_start + lowest_party_level_idx * 11 + i,
-                                    self.read_m(box_nicknames_addr_start + highest_box_level_idx * 11 + i))
-
-    self.delete_box_pokemon(highest_box_level_idx, num_mon_in_box)
-    self._num_mon_in_box = None
-
-    self.delete_box_pokemon_with_low_level(lowest_party_level)
-
-def delete_box_pokemon_with_low_level(self, lowest_party_level):
-    box_mon_addr_start = 0xda96
-    # delete all box pokemon with level < party lowest level
-    # step 1 find all box pokemon with level < party lowest level
-    # step 2 delete them
-    # step 3 update num_mon_in_box
-    num_mon_in_box = self.num_mon_in_box
-    if num_mon_in_box == 0:
-        # no pokemon in box, do nothing
+    sprite_map = gamestate.sprite_map
+    x = 4
+    y = 4
+    if gamestate.player_orientation == Orientation.DOWN:
+        x += 1
+    elif gamestate.player_orientation == Orientation.UP:
+        x -= 1
+    elif gamestate.player_orientation == Orientation.LEFT:
+        y -= 1
+    elif gamestate.player_orientation == Orientation.RIGHT:
+        y += 1
+    if sprite_map[x, y] != 32: # Snorlax
         return
-    box_levels = [self.read_m(box_mon_addr_start + i * 33 + 3) for i in range(num_mon_in_box)]
-    box_levels_to_delete = [i for i, x in enumerate(box_levels) if x <= lowest_party_level]
-    # start from the last index to delete
-    for i in range(len(box_levels_to_delete) - 1, -1, -1):
-        self.delete_box_pokemon(box_levels_to_delete[i], num_mon_in_box)
-        self._num_mon_in_box = None
-        num_mon_in_box = self.num_mon_in_box
 
-def delete_box_pokemon(self, box_mon_idx, num_mon_in_box):
-    box_mon_addr_start = 0xda96
-    box_species_addr_start = 0xDA81
-    box_nicknames_addr_start = 0xde06
-    # delete the box pokemon by shifting the rest up
-    # box mon only has 33 stats
-    for i in range(box_mon_idx, num_mon_in_box - 1):
-        # species
-        self.pyboy.set_memory_value(box_species_addr_start + i, self.read_m(box_species_addr_start + i + 1))
-        # stats
-        for j in range(33):
-            self.pyboy.set_memory_value(box_mon_addr_start + i * 33 + j,
-                                        self.read_m(box_mon_addr_start + (i + 1) * 33 + j))
-        # nickname
-        for j in range(11):
-            self.pyboy.set_memory_value(box_nicknames_addr_start + i * 11 + j,
-                                        self.read_m(box_nicknames_addr_start + (i + 1) * 11 + j))
+    flute_bag_idx = gamestate.ordered_bag_items.index(BagItem.POKE_FLUTE)
+    ram = gamestate._ram
+    ram[RamLocation.BATTLE_SAVED_ITEM] = 2
+    ram[RamLocation.BAG_SAVED_ITEM] = 0
+    ram[RamLocation.SCROLL_OFFSET_VALUE] = flute_bag_idx
 
-    # reduce num_mon_in_box by 1
-    self.pyboy.set_memory_value(0xda80, num_mon_in_box - 1)
-    # set the last box pokemon species to ff as it is empty
-    self.pyboy.set_memory_value(box_species_addr_start + (num_mon_in_box - 1), 0xff)
-    # set the last box pokemon stats to 0
-    for i in range(33):
-        self.pyboy.set_memory_value(box_mon_addr_start + (num_mon_in_box - 1) * 33 + i, 0)
-    # set the last box pokemon nickname to 0
-    for i in range(11):
-        self.pyboy.set_memory_value(box_nicknames_addr_start + (num_mon_in_box - 1) * 11 + i, 0)
-
-    '''
-
+    step_func(WindowEvent.PRESS_BUTTON_START)
+    for _ in range(10):
+        step_func(WindowEvent.PRESS_BUTTON_A)

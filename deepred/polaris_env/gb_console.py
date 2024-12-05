@@ -244,7 +244,6 @@ class GBConsole(PyBoy):
         if event == WindowEvent.PRESS_BUTTON_A and not self._gamestate.open_menu:
             # We should not be able to open any other menu beside the shop menu if we disable the START menu
             # but ok .
-
             if self._gamestate.is_at_pokemart and self._gamestate.mart_items:
                 self.agent_helper.shopping(self._gamestate)
                 finalise = False
@@ -252,14 +251,9 @@ class GBConsole(PyBoy):
                 self.agent_helper.manage_party(self._gamestate)
                 finalise = False
             else:
-                self.agent_helper.field_move
-                        self.scripted_routine_flute(action)
-                        self.scripted_routine_cut(action)
-                        self.scripted_routine_surf(action)
-                        action = self.scripted_manage_party(action)
-                    self.pyboy.send_input(self.valid_actions[action])
-                else:
-                    self.pyboy.send_input(emulated)
+                self.agent_helper.field_move()
+
+        return finalise
 
     def handle_battle_event(
             self,
@@ -318,11 +312,11 @@ class GBConsole(PyBoy):
             self.agent_helper.roll_party(gamestate=self._gamestate)
             return
 
-        process_event = True
+        finalise = True
         if self._gamestate.is_in_battle:
-            finalise = self.handle_battle_inputs()
+            finalise = self.handle_battle_event(event)
         else:
-            finalise = self.handle_world_inputs()
+            finalise = self.handle_world_event(event)
 
         if finalise:
             self.step_event(event)

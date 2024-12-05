@@ -142,6 +142,11 @@ class RamLocation(IntEnum):
     LAST_MAP = 0xD365
     TILE_MAP_BASE = 0xC3A0
 
+    BATTLE_SAVED_ITEM = 0xCC2D
+    BAG_SAVED_ITEM = 0xCC2C
+    SCROLL_OFFSET_VALUE = 0xCC36
+
+
 
 
     # def __add__(self, other: Union[Enum, int]):
@@ -161,7 +166,7 @@ class Orientation(IntEnum):
     DOWN = 0
     UP = 4
     LEFT = 8
-    RIGTH = 12
+    RIGHT = 12
 
 
 class Badges(IntEnum):
