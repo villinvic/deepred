@@ -26,7 +26,7 @@ class MoveInfo(NamedTuple):
         return self.power * mult
 
 
-MoveInfos = {
+MovesInfo = {
     Move.NO_MOVE: MoveInfo(effect="NO_ADDITIONAL_EFFECT", type_id=0, raw_power=0, power=0, accuracy=0, pp=0),
     Move.POUND: MoveInfo(effect="NO_ADDITIONAL_EFFECT", type_id=0, raw_power=40, power=40.0, accuracy=100, pp=35),
     Move.KARATE_CHOP: MoveInfo(effect="NO_ADDITIONAL_EFFECT", type_id=0, raw_power=50, power=50.0, accuracy=100, pp=25),

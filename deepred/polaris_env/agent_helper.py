@@ -1,8 +1,13 @@
+from typing import Dict, List
+
 import numpy as np
 
+from deepred.polaris_env.game_patching import set_player_money, to_double
 from deepred.polaris_env.gamestate import GameState
-from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, Move
-from deepred.polaris_env.pokemon_red.move_infos import MoveInfos
+from deepred.polaris_env.pokemon_red.bag_item_info import BagItemsInfo, BagItemInfo
+from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, Move, BagItem, Map, Pokemon
+from deepred.polaris_env.pokemon_red.move_info import MovesInfo
+from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats, PokemonBaseStats
 
 
 class AgentHelper:
@@ -11,11 +16,12 @@ class AgentHelper:
 
     - Auto switch
     - Auto learn better moves
-    - routines for HMs, flute
+    - routines for HMs, flute, other
     - manage pokemons in party, box
     - manage bag items
     - sell/buy items
-    - wait whenever an action can be taken (I think the modded rom takes care of this already).
+
+    # TODO: they also block certain paths to accelerate learning.
     """
 
     def roll_party(
@@ -108,118 +114,346 @@ class AgentHelper:
         ptypes = [gamestate._read(RamLocation.PARTY_0_TYPE0 + (party_pos * DataStructDimension.POKEMON_STATS) + i)
                   for i in range(2)]
         move_powers = [
-            MoveInfos[Move(gamestate._read(RamLocation.WHICH_POKEMON_LEARNED_MOVES + i))].actual_power(ptypes)
+            MovesInfo[Move(gamestate._read(RamLocation.WHICH_POKEMON_LEARNED_MOVES + i))].actual_power(ptypes)
             for i in range(4)]
 
-        new_move_power = MoveInfos[Move(gamestate._read(RamLocation.MOVE_TO_LEARN))].actual_power(ptypes)
+        new_move_power = MovesInfo[Move(gamestate._read(RamLocation.MOVE_TO_LEARN))].actual_power(ptypes)
 
         argmin_move = np.argmin(move_powers)
         if new_move_power > move_powers[argmin_move]:
             gamestate._ram[RamLocation.MENU_ITEM_ID] = argmin_move
             return True
         else:
-            # do not replace, press B
             return False
 
-    def buy(
+    def shopping(
+            self,
+            gamestate: GameState
+    ) -> bool:
+        """
+        For now, buy as much as possible
+        Returns if we bought successfully or not.
+        """
+
+        MAX_BAG_TYPES = 20
+        MAX_ITEM_COUNT = 10
+        current_bag = gamestate.bag_items
+        money = gamestate.player_money
+
+        def bag_full():
+            return len(current_bag) >= MAX_BAG_TYPES
+
+        # Ensure bag starts within constraints
+        money = sell_useless_items(current_bag, money)
+
+        # Buy items in order of their priority
+        ranked_mart_items = sorted(
+            gamestate.mart_items,
+            key=lambda i: -BagItemsInfo[i].priority,
+        )
+        for item in ranked_mart_items:
+            item_info = BagItemsInfo[item]
+            while (
+                    money >= item_info.price
+                    and
+                    current_bag[item] < MAX_ITEM_COUNT
+                    and not bag_full()
+                    and item_info.priority > 0 # never buy useless items.
+            ):
+                money = buy_item(
+                    current_bag,
+                    money,
+                    item,
+                    item_info
+                )
+
+                # If our bag is full and we still have enough money:
+                if bag_full() and money >= item_info.price:
+                    sell_items_to_free_space(
+                        current_bag,
+                        money
+                    )
+
+        ram = gamestate._ram
+        inject_bag_to_ram(
+            ram,
+            current_bag
+        )
+        set_player_money(ram, money)
+
+        # Always returns True
+        return True
+
+    def handle_full_bag(
             self,
             gamestate: GameState
     ):
-        if not gamestate.open_menu:
-            # We should not be able to open any other menu beside the shop menu if we disable the START menu
-            return
+        """
+        TODO: Unused
+        """
+        bag = gamestate.bag_items
+        sell_items_to_free_space(
+            bag,
+            toss=True
+        )
+        inject_bag_to_ram(gamestate._ram, bag)
 
-        mart_items = self.get_mart_items()
-        if not mart_items:
-            # not in mart or incorrect x, y
-            # or mart_items is empty for purchasable items
-            return False
-        bag_items = self.get_items_in_bag()
-        item_list_to_buy = [POKEBALL_PRIORITY, POTION_PRIORITY, REVIVE_PRIORITY]
-        target_quantity = 10
-        for n_list, item_list in enumerate(item_list_to_buy):
-            if self.stage_manager.stage == 11:
-                if n_list == 0:
-                    # pokeball
-                    target_quantity = 5
-                elif n_list == 1:
-                    # potion
-                    target_quantity = 20
-                elif n_list == 2:
-                    # revive
-                    target_quantity = 10
-            best_in_mart_id, best_in_mart_priority = self.get_best_item_from_list(item_list, mart_items)
-            best_in_bag_id, best_in_bag_priority = self.get_best_item_from_list(item_list, bag_items)
-            best_in_bag_idx = bag_items.index(best_in_bag_id) if best_in_bag_id is not None else None
-            best_in_bag_quantity = self.get_items_quantity_in_bag()[best_in_bag_idx] if best_in_bag_idx is not None else None
-            if best_in_mart_id is None:
-                continue
-            if best_in_bag_priority is not None:
-                if n_list == 0 and best_in_mart_priority - best_in_bag_priority > 1:
-                    # having much better pokeball in bag, skip buying
-                    continue
-                elif n_list == 1 and best_in_mart_priority - best_in_bag_priority > 2:
-                    # having much better potion in bag, skip buying
-                    continue
-                # revive only have 2 types so ok to buy if insufficient
-                if best_in_bag_id is not None and best_in_bag_priority < best_in_mart_priority and best_in_bag_quantity >= target_quantity:
-                    # already have better item in bag with desired quantity
-                    continue
-                if best_in_bag_quantity is not None and best_in_bag_priority == best_in_mart_priority and best_in_bag_quantity >= target_quantity:
-                    # same item
-                    # and already have enough
-                    continue
-            item_price = self.get_item_price_by_id(best_in_mart_id)
-            # try to sell items
-            if best_in_bag_priority is not None and best_in_bag_priority > best_in_mart_priority:
-                # having worse item in bag, sell it
-                if n_list == 0 and best_in_bag_priority - best_in_mart_priority > 1:
-                    # having much worse pokeball in bag
-                    self.sell_or_delete_item(is_sell=True, good_item_id=best_in_bag_id)
-                elif n_list == 1 and best_in_bag_priority - best_in_mart_priority > 2:
-                    # having much worse potion in bag
-                    self.sell_or_delete_item(is_sell=True, good_item_id=best_in_bag_id)
-            else:
-                self.sell_or_delete_item(is_sell=True)
-            # get items again
-            bag_items = self.get_items_in_bag()
-            if best_in_mart_id not in bag_items and len(bag_items) >= 19:
-                # is new item and bag is full
-                # bag is full even after selling
-                break
-            if self.read_money() < item_price:
-                # not enough money
-                continue
-            if best_in_bag_quantity is None:
-                needed_quantity = target_quantity
-            elif best_in_bag_priority == best_in_mart_priority:
-                # item in bag is same
-                needed_quantity = target_quantity - best_in_bag_quantity
-            elif best_in_bag_priority > best_in_mart_priority:
-                # item in bag is worse
-                needed_quantity = target_quantity
-            elif best_in_bag_priority < best_in_mart_priority:
-                # item in bag is better, but not enough quantity
-                if best_in_mart_id in bag_items:
-                    mart_item_in_bag_idx = bag_items.index(best_in_mart_id)
-                    needed_quantity = target_quantity - self.get_items_quantity_in_bag()[mart_item_in_bag_idx] - best_in_bag_quantity
-                else:
-                    needed_quantity = target_quantity - best_in_bag_quantity
-            if needed_quantity < 1:
-                # already have enough
-                continue
-            affordable_quantity = min(needed_quantity, (self.read_money() // item_price))
-            self.buy_item(best_in_mart_id, affordable_quantity, item_price)
-            # reset cache and get items again
-            self._items_in_bag = None
-            bag_items = self.get_items_in_bag()
-            self.pyboy.set_memory_value(0xD31D, len(bag_items))
-            self.pyboy.set_memory_value(RAM.wBagSavedMenuItem.value, 0x0)
-            # print(f'Bought item: {best_in_mart_id} x {affordable_quantity}')
-        self.use_mart_count += 1
-        # reset item count to trigger scripted_manage_items
-        self._last_item_count = 0
-        return True
+    def manage_party(
+            self,
+            gamestate: GameState
+    ) -> bool:
+        """
+           Moves the lowest total stats pokemon in the party with the highest stats pokemon in the box.
+
+           If the party is not full, just add the best pokemon.
+           If the box is empty, do nothing.
+
+           Returns if we interacted with the pc or not.
+
+           TODO: as we will need the info at all time, we should keep in memory the box pokemons somehow.
+                -> we need an observation telling us there is good pokemons in the box.
+           """
+        ram = gamestate._ram
+        box_count = gamestate.box_pokemon_count
+
+        box_pokemons = extract_box_pokemon_stats(gamestate)
+        box_stat_sums = [box_pokemon.scale(50).sum() for box_pokemon in box_pokemons]
+        best_box_pokemon = np.argmax(box_stat_sums)
+        # If our party is not full, just move the best box pokemon into our party
+        if gamestate.box_pokemon_count < 6:
+            return send_box_pokemon_to_party(
+
+                best_box_pokemon
+            )
+
+        party_stat_sums = []
+        for i in range(gamestate.party_count):
+            pass
+
+        party_stat_sums = []
+        worst_party_pokemon = np.argmin(party_stat_sums)
+
+        if party_stat_sums[worst_party_pokemon] > box_stat_sums[best_box_pokemon]:
+            # We found a pokemon that is worse that our team in the box, just release worst pokemons.
+            return release_weak_pokemons(box_stat_sums, stat_sum_threshold=party_stat_sums[worst_party_pokemon])
+
+        ram[RamLocation.BOX_POKEMON_COUNT] = new_boxcount
+
+
+def sell_useless_items(
+        current_bag: Dict[BagItem, int],
+        current_money: int = 0
+) -> int:
+    """
+    sell all priority 0 items.
+    """
+    for item, quantity in list(current_bag.items()):
+        item_info = BagItemsInfo[item]
+        if item_info.priority == 0:
+            current_money += quantity * item_info.sell_price
+            del current_bag[item]
+    return current_money
+
+
+def sell_items_to_free_space(
+        current_bag: Dict[BagItem, int],
+        current_money: int = 0,
+        toss: bool = False
+) -> int:
+    """
+    We sell the worst item type in the bag.
+    We can optionally pass toss=True if we are tossing (no money gained).
+    """
+    item_to_sell = sorted(
+        list(current_bag.keys()),
+        key=lambda i: BagItemsInfo[i].priority,
+    )[0]
+
+    item_info = BagItemsInfo[item_to_sell]
+    if item_info.priority < 9:
+        if not toss:
+            current_money += item_info.sell_price * current_bag[item_to_sell]
+        del current_bag[item_to_sell]
+
+    return current_money
+
+
+def buy_item(
+        current_bag: Dict[BagItem, int],
+        current_money: int,
+        item: BagItem,
+        item_info: BagItemInfo,
+) -> int:
+    current_bag[item] += 1
+    current_money -= item_info.price
+    return current_money
+
+def inject_bag_to_ram(
+        ram,
+        bag: Dict[BagItem, int]
+    ):
+    """
+    Writes the content of the bag into the ram.
+    """
+    for item_type_index, (item, quantity) in enumerate(bag.items()):
+        offset = item_type_index * 2
+        ram[RamLocation.BAG_ITEMS_START + offset] = item
+        ram[RamLocation.BAG_ITEMS_START + offset + 1] = quantity
+
+    # Fill the rest with dummy stuff
+    for item_type_index in range(len(bag), 20):
+        offset = item_type_index * 2
+        ram[RamLocation.BAG_ITEMS_START + offset] = BagItem.NO_ITEM
+        ram[RamLocation.BAG_ITEMS_START + offset + 1] = 0
+
+    ram[RamLocation.BAG_COUNT] = len(bag)
+
+
+def extract_box_pokemon_stats(
+        gamestate: GameState
+) -> List[PokemonStats]:
+
+    box_pokemons = []
+    for i in range(gamestate.box_pokemon_count):
+        offset = RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS
+        species = gamestate._read(offset)
+        level = gamestate._read(offset + 3)
+        exp = gamestate._read_triple(offset + 14)
+        hp_ev = gamestate._read_double(offset + 17)
+        atk_ev = gamestate._read_double(offset + 19)
+        def_ev = gamestate._read_double(offset + 21)
+        spd_ev = gamestate._read_double(offset + 23)
+        spc_ev = gamestate._read_double(offset + 25)
+        atk_def_iv = gamestate._read(offset + 27)
+        spd_spc_iv = gamestate._read(offset + 28)
+
+        atk_iv = atk_def_iv >> 4
+        def_iv = atk_def_iv & 0xF
+        spd_iv = spd_spc_iv >> 4
+        spc_iv = spd_spc_iv & 0xF
+
+        hp_iv = 0
+        hp_iv += 8 if atk_iv % 2 == 1 else 0
+        hp_iv += 4 if def_iv % 2 == 1 else 0
+        hp_iv += 2 if spd_iv % 2 == 1 else 0
+        hp_iv += 1 if spc_iv % 2 == 1 else 0
+
+        pokemon_stats = PokemonStats(
+            pokemon=Pokemon(species),
+            level=level,
+            exp=exp,
+            evs=PokemonBaseStats(
+                hp=hp_ev, attack=atk_ev, defense=def_ev, speed=spd_ev, special=spc_ev
+            ),
+            ivs=PokemonBaseStats(
+                hp=hp_iv, attack=atk_iv, defense=def_iv, speed=spd_iv, special=spc_iv
+
+            )
+        )
+        box_pokemons.append(pokemon_stats)
+
+    return box_pokemons
+
+
+def send_box_pokemon_to_party(
+        ram,
+        pokemon_stats: PokemonStats,
+        box_index: int,
+        party_index: int,
+        box_count: int
+) -> int:
+    """
+    Gets a pokemon from the box and replaces (and erases) one in the party.
+    Returns new amount of pokemon in the box.
+    """
+
+    ram[RamLocation.PARTY_0_ID + party_index] = ram[RamLocation.BOX_POKEMON_SPECIES_START + box_index]
+
+    ram[slice(RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS,
+    RamLocation.PARTY_START + (party_index + 1) * DataStructDimension.POKEMON_STATS, 1)] = ram[slice(
+        RamLocation.BOX_POKEMON_START + box_index * DataStructDimension.BOX_POKEMON_STATS,
+        RamLocation.BOX_POKEMON_START + (box_index + 1) * DataStructDimension.BOX_POKEMON_STATS, 1)
+    ]
+
+    scaled_stats = pokemon_stats.scale()
+
+    b1, b2 = to_double(scaled_stats.hp)
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34] = b1
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35] = b2
+
+    b1, b2 = to_double(scaled_stats.attack)
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 2] = b1
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 2] = b2
+
+    b1, b2 = to_double(scaled_stats.defense)
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 4] = b1
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 4] = b2
+
+    b1, b2 = to_double(scaled_stats.speed)
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 6] = b1
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 6] = b2
+
+    b1, b2 = to_double(scaled_stats.special)
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 8] = b1
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 8] = b2
+
+    ram[slice(RamLocation.PARTY_NICKNAMES_START + party_index * DataStructDimension.POKEMON_NICKNAME,
+              RamLocation.PARTY_NICKNAMES_START + (party_index + 1) * DataStructDimension.POKEMON_NICKNAME,
+              1
+              )] = ram[slice(
+        RamLocation.BOX_NICKNAMES_START + box_index * DataStructDimension.POKEMON_NICKNAME,
+        RamLocation.BOX_NICKNAMES_START + (box_index + 1) * DataStructDimension.POKEMON_NICKNAME, 1)]
+
+    return delete_pokemon_box_at_index(
+        ram,
+        box_count,
+        box_index
+    )
+
+
+def release_weak_pokemons(
+        box_pokemon_stat_sums: List[int],
+        threshold: int,
+) -> int:
+    """
+
+    """
+
+
+def delete_pokemon_box_at_index(
+        ram,
+        box_count: int,
+        index: int
+):
+    """
+    Removes the pokemon at give index by shifting the pokemon indexed below up one spot.
+    """
+    for i in range(index, box_count - 1):
+        ram[RamLocation.BOX_POKEMON_SPECIES_START + i] = ram[RamLocation.BOX_POKEMON_SPECIES_START + i + 1]
+
+        ram[slice(RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS,
+                  RamLocation.BOX_POKEMON_START + (i + 1) * DataStructDimension.BOX_POKEMON_STATS, 1)] = ram[slice(
+            RamLocation.BOX_POKEMON_START + (i + 1) * DataStructDimension.BOX_POKEMON_STATS,
+            RamLocation.BOX_POKEMON_START + (i + 2) * DataStructDimension.BOX_POKEMON_STATS, 1
+        )]
+
+        ram[slice(RamLocation.BOX_NICKNAMES_START + i * DataStructDimension.POKEMON_NICKNAME,
+                  RamLocation.BOX_NICKNAMES_START + (i + 1) * DataStructDimension.POKEMON_NICKNAME, 1)] = ram[slice(
+            RamLocation.BOX_NICKNAMES_START + (i + 1) * DataStructDimension.POKEMON_NICKNAME,
+            RamLocation.BOX_NICKNAMES_START + (i + 2) * DataStructDimension.POKEMON_NICKNAME, 1
+        )]
+
+    new_boxcount = box_count - 1
+
+    ram[RamLocation.BOX_POKEMON_SPECIES_START + new_boxcount] = 0xFF
+
+    ram[slice(RamLocation.BOX_POKEMON_START + new_boxcount * DataStructDimension.BOX_POKEMON_STATS,
+              RamLocation.BOX_POKEMON_START + (new_boxcount + 1) * DataStructDimension.BOX_POKEMON_STATS, 1)] = 0
+
+    ram[slice(RamLocation.BOX_NICKNAMES_START + new_boxcount * DataStructDimension.POKEMON_NICKNAME,
+              RamLocation.BOX_NICKNAMES_START + (new_boxcount + 1) * DataStructDimension.POKEMON_NICKNAME, 1)] = 0
+
+    return new_boxcount
 
 
     '''
@@ -355,3 +589,4 @@ def delete_box_pokemon(self, box_mon_idx, num_mon_in_box):
         self.pyboy.set_memory_value(box_nicknames_addr_start + (num_mon_in_box - 1) * 11 + i, 0)
 
     '''
+

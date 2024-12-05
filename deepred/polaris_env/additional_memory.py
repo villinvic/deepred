@@ -130,6 +130,29 @@ class MapHistory(AdditionalMemoryBlock):
         self.map_history.append(gamestate.map)
 
 
+class GoodPokemonInBoxCache(AdditionalMemoryBlock):
+
+    def __init__(
+            self,
+    ):
+        """
+        Keeps track of the latest maps visited.
+        # TODO: they also give the number of steps since each map was last visited.
+
+        :param map_history_length: Length of the history
+        """
+        self.better_pokemon_in_box = True
+        self._prev_box_count = 0
+
+    def update(
+            self,
+            gamestate: GameState
+    ):
+        if gamestate.box_pokemon_count > self._prev_box_count:
+            # detect if we have a better pokemon in box.
+            pass
+
+
 class AdditionalMemory(AdditionalMemoryBlock):
 
     def __init__(
@@ -148,8 +171,10 @@ class AdditionalMemory(AdditionalMemoryBlock):
         self.pokecenter_checkpoints = PokecenterCheckpoints()
         self.map_history = MapHistory(map_history_length)
         self.flag_history = FlagHistory(flag_history_length)
+        self.good_pokemon_in_box = GoodPokemonInBoxCache()
 
-        self.blocks = [self.visited_tiles, self.pokecenter_checkpoints, self.map_history, self.flag_history]
+        self.blocks = [self.visited_tiles, self.pokecenter_checkpoints, self.map_history, self.flag_history,
+                       self.good_pokemon_in_box]
 
     def update(
             self,

@@ -105,6 +105,7 @@ class RamLocation(IntEnum):
     ORIENTATION = 0xC109
     BAG_ITEMS_START = 0xD31E
     BAG_ITEMS_END = 0xD347
+    BAG_COUNT = 0xD31D
     PARTY_MENU_MESSAGE_POINTERS = 0x6e89
     # Game events
     # TODO: we can curate the events and only care about the most relevant ones. By default, we have 502 events.
@@ -116,7 +117,9 @@ class RamLocation(IntEnum):
 
     BOX_POKEMON_COUNT = 0xDA80
     BOX_POKEMON_START = 0xDA96
-    BOX_SPECIES_START = 0xDA81
+    BOX_POKEMON_SPECIES_START = 0xDA81
+
+
     BOX_NICKNAMES_START = 0xDE06
 
     SAFARI_STEPS = 0xD70D
@@ -137,8 +140,9 @@ class RamLocation(IntEnum):
     
     POKECENTER_CHECKPOINT = 0xD719
     LAST_MAP = 0xD365
-
     TILE_MAP_BASE = 0xC3A0
+
+
 
     # def __add__(self, other: Union[Enum, int]):
     #     if isinstance(other, int):
@@ -149,9 +153,16 @@ class RamLocation(IntEnum):
 class DataStructDimension(IntEnum):
 
     POKEMON_STATS = 44
+    BOX_POKEMON_STATS = 33
     POKEMON_NICKNAME = 11
     WARP = 4
-    
+
+class Orientation(IntEnum):
+    DOWN = 0
+    UP = 4
+    LEFT = 8
+    RIGTH = 12
+
 
 class Badges(IntEnum):
     BOULDER = 0
@@ -216,7 +227,7 @@ class BattleKind(IntEnum):
 
 class BagItem(IntEnum):
     # Stored in [0xD31E, 0xD346]
-    NO_ITEM = 0x00
+    NO_ITEM2 = 0x00
     MASTER_BALL = 0x01
     ULTRA_BALL = 0x02
     GREAT_BALL = 0x03
@@ -300,6 +311,9 @@ class BagItem(IntEnum):
     MAX_ETHER = 0x51
     ELIXIR = 0x52
     MAX_ELIXIR = 0x53
+
+    NO_ITEM = 0xFF
+
 
     # elevator floors use item IDs
     FLOOR_B2F = 0x54

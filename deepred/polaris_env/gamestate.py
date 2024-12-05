@@ -1,3 +1,4 @@
+from collections import defaultdict
 from pathlib import Path
 from typing import Union, List, Dict
 
@@ -6,9 +7,10 @@ from PIL import Image
 
 from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.pokemon_red.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
-    DataStructDimension, Badges, BattleType, ProgressionFlag
+    DataStructDimension, Badges, BattleType, ProgressionFlag, Orientation
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 from deepred.polaris_env.pokemon_red.map_warps import MapWarps, MapWarp, NamedWarpIds
+from deepred.polaris_env.pokemon_red.mart_info import MartInfos, MartInfo
 from deepred.polaris_env.utils import cproperty
 
 B = 256
@@ -169,6 +171,29 @@ class GameState:
             Map.CINNABAR_POKECENTER, Map.SAFFRON_POKECENTER, Map.VIRIDIAN_POKECENTER,
             Map.INDIGO_PLATEAU_LOBBY
         ]
+
+    @cproperty
+    def is_pc_room(self) -> bool:
+        """
+        Is this a room where we have a pc access?
+        """
+        return self.is_at_pokecenter or self.map in [
+            Map.CELADON_MANSION_2F, Map.SILPH_CO_11F, Map.CINNABAR_LAB_FOSSIL_ROOM
+        ]
+
+    @cproperty
+    def can_use_pc(self) -> bool:
+        """
+        Can we use the pc now (right orientation, location and if we have pokemons in the pc)
+        TODO: mabye allow to dump pokemons even if no pokemon in box.
+        """
+        return (
+                self.player_orientation == Orientation.UP
+                and
+                (self.pos_x, self.pos_y) in pc_locations.get(self.map, pokecenter_pc_location)
+                and
+                self.box_pokemon_count > 0
+        )
 
     @cproperty
     def is_at_pokemart(self) -> bool:
@@ -759,45 +784,66 @@ class GameState:
         return self._read(RamLocation.POS_Y)
 
     @cproperty
-    def bag_items(self) -> Dict[BagItem, int]:
-        # item_types = self._read(slice(RamLocation.BAG_ITEMS_START, RamLocation.BAG_ITEMS_END, 2))
-        # item_counts = self._read(slice(RamLocation.BAG_ITEMS_START+1, RamLocation.BAG_ITEMS_END, 2))
-        bag_items = {}
+    def ordered_bag_items(self) -> List[BagItem]:
+        """
+        Returns the bag content, ordered.
+        """
+        items = []
         for address in range(RamLocation.BAG_ITEMS_START, RamLocation.BAG_ITEMS_END, 2):
-            item_type = self._read(address)
-            item_count = self._read(address + 1)
-
-            if item_type == 255:
+            item_type = BagItem(self._read(address))
+            if item_type == BagItem.NO_ITEM:
                 break
+            items.append(item_type)
+        return items + [BagItem.NO_ITEM] * (len(items) - 20)
 
-            bag_items[BagItem(item_type)] = item_count
+    @cproperty
+    def ordered_bag_counts(self) -> List[int]:
+        """
+        Returns the bag content counts, ordered.
+        """
+        item_counts = []
+        for address in range(RamLocation.BAG_ITEMS_START+1, RamLocation.BAG_ITEMS_END, 2):
+            item_count = self._read(address)
+            if item_count == 0:
+                break
+            item_counts.append(item_count)
+        return item_counts + [BagItem.NO_ITEM] * (len(item_counts) - 20)
+
+
+    @cproperty
+    def bag_items(self) -> Dict[BagItem, int]:
+        """
+        Returns the bag as a dict of items: counts.
+        """
+        bag_items = defaultdict(int) # default dict to easily add new items when buying.
+        for item, count in zip(self.ordered_bag_items, self.ordered_bag_counts):
+            if item == BagItem.NO_ITEM:
+                break
+            bag_items[item] = count
 
         return bag_items
 
-    def get_mart_items(self):
+    @cproperty
+    def bag_full(self) -> bool:
+        """
+        Is the bag full M
+        """
+        return self._read(RamLocation.BAG_COUNT) >= 20
 
-        x, y = self.current_coords
-        # key format map_id@x,y
-        dict_key = f'{map_id}@{x},{y}'
-        if dict_key in MART_ITEMS_ID_DICT:
-            mart_matched = MART_ITEMS_ID_DICT[dict_key]
-            # match direction in mart_matched['dir']
-            facing_direction = self.read_m(0xC109)  # wSpritePlayerStateData1FacingDirection
-            direction = None
-            if facing_direction == 0:  # down
-                direction = 'down'
-            elif facing_direction == 4:  # up
-                direction = 'up'
-            elif facing_direction == 8:  # left
-                direction = 'left'
-            elif facing_direction == 12:  # right
-                direction = 'right'
-            if direction is None:
-                print(f'Warning: invalid facing direction: {facing_direction}')
-                return None
-            if direction == mart_matched['dir']:
-                return mart_matched['items']
-        return None
+    @cproperty
+    def player_orientation(self) -> Orientation:
+        """
+        Current orientation of the player sprite.
+        """
+        return Orientation(self._read(RamLocation.ORIENTATION))
+
+    @cproperty
+    def mart_items(self) -> List[BagItem]:
+        """
+        Items of the mart currently interacting with.
+        """
+        mart_identifier = f"{self.map.name}@{self.pos_x},{self.pos_y},{self.player_orientation.name}"
+        return MartInfos.get(mart_identifier, MartInfo()).items
 
     @cproperty
     def can_use_cut(self) -> bool:
@@ -1100,6 +1146,14 @@ switch_coords = {
     Map.POKEMON_MANSION_3F: [(10, 5)],
     Map.POKEMON_MANSION_B1F: [(20, 3), (18, 25)],
 
+}
+
+pokecenter_pc_location = [(13, 4)]
+pc_locations = {
+    Map.INDIGO_PLATEAU_LOBBY: [(15, 8)],
+    Map.CELADON_MANSION_2F: [(0, 6)],
+    Map.SILPH_CO_11F: [(10, 13)],
+    Map.CINNABAR_LAB_FOSSIL_ROOM: [(0, 5), (2, 5)],
 }
 
 def assign_new_sprite_in_sprite_minimap(

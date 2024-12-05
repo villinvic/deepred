@@ -241,24 +241,18 @@ class GBConsole(PyBoy):
             self.step_event(WindowEvent.PRESS_BUTTON_A)
             return False
 
-        if self._gamestate.is_at_pokemart:
-            if event == WindowEvent.PRESS_BUTTON_A:
-                self.agent_helper.buy()
+        if event == WindowEvent.PRESS_BUTTON_A and not self._gamestate.open_menu:
+            # We should not be able to open any other menu beside the shop menu if we disable the START menu
+            # but ok .
+
+            if self._gamestate.is_at_pokemart and self._gamestate.mart_items:
+                self.agent_helper.shopping(self._gamestate)
                 finalise = False
-            elif event == WindowEvent.PRESS_BUTTON_B:
-                self.agent_helper.sell()
+            elif self._gamestate.can_use_pc:
+                self.agent_helper.manage_party(self._gamestate)
                 finalise = False
-
-            # sell
-
-        if self._gamestate.is_at_pokemart and action == 4:
-            can_buy = self.scripted_buy_items()
-            if can_buy:
-                action = self.noop_button_index
-
-                # press button then release after some steps
-                if not emulated:
-                    if action == 4:
+            else:
+                self.agent_helper.field_move
                         self.scripted_routine_flute(action)
                         self.scripted_routine_cut(action)
                         self.scripted_routine_surf(action)

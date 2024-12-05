@@ -20,6 +20,23 @@ def to_bcd(amount):
     """
     return ((amount // 10) << 4) + (amount % 10)
 
+def to_double(amount):
+    """
+    returns a tuple, values for both bytes
+    """
+    byte1 = (amount >> 8) & 0xFF
+    byte2 = amount & 0xFF
+    return byte2, byte1
+
+def to_triple(amount):
+    """
+    returns a tuple, values for both bytes
+    """
+    byte1 = (amount >> 16) & 0xFF
+    byte2 = (amount >> 8) & 0xFF
+    byte3 = amount & 0xFF
+    return byte3, byte2, byte1
+
 def set_bit(
         byte: int,
         bit: int
@@ -32,7 +49,6 @@ def set_bit(
 
 def set_player_money(
         ram,
-        gamestate: GameState,
         amount: int,
 ):
     """
@@ -55,7 +71,6 @@ def out_of_cash_safari_patch(
         if gamestate.player_money < 501:
             set_player_money(
                 ram,
-                gamestate,
                 500
             )
 
