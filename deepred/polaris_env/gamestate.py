@@ -774,6 +774,31 @@ class GameState:
 
         return bag_items
 
+    def get_mart_items(self):
+
+        x, y = self.current_coords
+        # key format map_id@x,y
+        dict_key = f'{map_id}@{x},{y}'
+        if dict_key in MART_ITEMS_ID_DICT:
+            mart_matched = MART_ITEMS_ID_DICT[dict_key]
+            # match direction in mart_matched['dir']
+            facing_direction = self.read_m(0xC109)  # wSpritePlayerStateData1FacingDirection
+            direction = None
+            if facing_direction == 0:  # down
+                direction = 'down'
+            elif facing_direction == 4:  # up
+                direction = 'up'
+            elif facing_direction == 8:  # left
+                direction = 'left'
+            elif facing_direction == 12:  # right
+                direction = 'right'
+            if direction is None:
+                print(f'Warning: invalid facing direction: {facing_direction}')
+                return None
+            if direction == mart_matched['dir']:
+                return mart_matched['items']
+        return None
+
     @cproperty
     def can_use_cut(self) -> bool:
         """
@@ -966,9 +991,9 @@ class GameState:
     def warp_map(self) -> np.ndarray:
         """
         A map of visible warps.
-        # TODO: store somewhere that (9, 10) is the standard size of tilemaps.
+        # Warps have their own id, are embeddings really necessary ?
         """
-        warp_map = np.zeros((9, 10), dtype=np.uint8)
+        warp_map = np.zeros((9, 10), dtype=np.uint16)
         warps = MapWarps[self.map]
         if len(warps) == 0:
             return warp_map
@@ -1020,7 +1045,7 @@ class GameState:
         4. water
         5. previously visited tiles
         """
-        maps = np.zeros((8, 9, 10), dtype=np.uint8)
+        maps = np.zeros((7, 9, 10), dtype=np.uint8)
         # TODO:
         #    clean up this function, we do not understand whats going on very well.
         #   - note: they do not update the count when player is warping ?
@@ -1051,7 +1076,6 @@ class GameState:
             maps[1] = (bottom_left_screen_tiles == 80).astype(np.uint8)  # 0x50
 
         maps[6] = self.visited_tiles
-        maps[7] = self.warp_map
 
         return maps
 

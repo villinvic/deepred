@@ -227,7 +227,7 @@ class GBConsole(PyBoy):
 
         return True
 
-    def handle_world_events(
+    def handle_world_event(
             self,
             event: WindowEvent
     ) -> bool:
@@ -241,9 +241,14 @@ class GBConsole(PyBoy):
             self.step_event(WindowEvent.PRESS_BUTTON_A)
             return False
 
-        if event == WindowEvent.PRESS_BUTTON_A:
-            if self._gamestate.is_at_pokemart:
+        if self._gamestate.is_at_pokemart:
+            if event == WindowEvent.PRESS_BUTTON_A:
                 self.agent_helper.buy()
+                finalise = False
+            elif event == WindowEvent.PRESS_BUTTON_B:
+                self.agent_helper.sell()
+                finalise = False
+
             # sell
 
         if self._gamestate.is_at_pokemart and action == 4:
@@ -262,7 +267,10 @@ class GBConsole(PyBoy):
                 else:
                     self.pyboy.send_input(emulated)
 
-    def handle_battle_inputs(self) -> bool:
+    def handle_battle_event(
+            self,
+            event: WindowEvent
+    ) -> bool:
         """
         Handles bot inputs when in battle.
         Returns if we are waiting for an input of the bot.

@@ -121,6 +121,106 @@ class AgentHelper:
             # do not replace, press B
             return False
 
+    def buy(
+            self,
+            gamestate: GameState
+    ):
+        if not gamestate.open_menu:
+            # We should not be able to open any other menu beside the shop menu if we disable the START menu
+            return
+
+        mart_items = self.get_mart_items()
+        if not mart_items:
+            # not in mart or incorrect x, y
+            # or mart_items is empty for purchasable items
+            return False
+        bag_items = self.get_items_in_bag()
+        item_list_to_buy = [POKEBALL_PRIORITY, POTION_PRIORITY, REVIVE_PRIORITY]
+        target_quantity = 10
+        for n_list, item_list in enumerate(item_list_to_buy):
+            if self.stage_manager.stage == 11:
+                if n_list == 0:
+                    # pokeball
+                    target_quantity = 5
+                elif n_list == 1:
+                    # potion
+                    target_quantity = 20
+                elif n_list == 2:
+                    # revive
+                    target_quantity = 10
+            best_in_mart_id, best_in_mart_priority = self.get_best_item_from_list(item_list, mart_items)
+            best_in_bag_id, best_in_bag_priority = self.get_best_item_from_list(item_list, bag_items)
+            best_in_bag_idx = bag_items.index(best_in_bag_id) if best_in_bag_id is not None else None
+            best_in_bag_quantity = self.get_items_quantity_in_bag()[best_in_bag_idx] if best_in_bag_idx is not None else None
+            if best_in_mart_id is None:
+                continue
+            if best_in_bag_priority is not None:
+                if n_list == 0 and best_in_mart_priority - best_in_bag_priority > 1:
+                    # having much better pokeball in bag, skip buying
+                    continue
+                elif n_list == 1 and best_in_mart_priority - best_in_bag_priority > 2:
+                    # having much better potion in bag, skip buying
+                    continue
+                # revive only have 2 types so ok to buy if insufficient
+                if best_in_bag_id is not None and best_in_bag_priority < best_in_mart_priority and best_in_bag_quantity >= target_quantity:
+                    # already have better item in bag with desired quantity
+                    continue
+                if best_in_bag_quantity is not None and best_in_bag_priority == best_in_mart_priority and best_in_bag_quantity >= target_quantity:
+                    # same item
+                    # and already have enough
+                    continue
+            item_price = self.get_item_price_by_id(best_in_mart_id)
+            # try to sell items
+            if best_in_bag_priority is not None and best_in_bag_priority > best_in_mart_priority:
+                # having worse item in bag, sell it
+                if n_list == 0 and best_in_bag_priority - best_in_mart_priority > 1:
+                    # having much worse pokeball in bag
+                    self.sell_or_delete_item(is_sell=True, good_item_id=best_in_bag_id)
+                elif n_list == 1 and best_in_bag_priority - best_in_mart_priority > 2:
+                    # having much worse potion in bag
+                    self.sell_or_delete_item(is_sell=True, good_item_id=best_in_bag_id)
+            else:
+                self.sell_or_delete_item(is_sell=True)
+            # get items again
+            bag_items = self.get_items_in_bag()
+            if best_in_mart_id not in bag_items and len(bag_items) >= 19:
+                # is new item and bag is full
+                # bag is full even after selling
+                break
+            if self.read_money() < item_price:
+                # not enough money
+                continue
+            if best_in_bag_quantity is None:
+                needed_quantity = target_quantity
+            elif best_in_bag_priority == best_in_mart_priority:
+                # item in bag is same
+                needed_quantity = target_quantity - best_in_bag_quantity
+            elif best_in_bag_priority > best_in_mart_priority:
+                # item in bag is worse
+                needed_quantity = target_quantity
+            elif best_in_bag_priority < best_in_mart_priority:
+                # item in bag is better, but not enough quantity
+                if best_in_mart_id in bag_items:
+                    mart_item_in_bag_idx = bag_items.index(best_in_mart_id)
+                    needed_quantity = target_quantity - self.get_items_quantity_in_bag()[mart_item_in_bag_idx] - best_in_bag_quantity
+                else:
+                    needed_quantity = target_quantity - best_in_bag_quantity
+            if needed_quantity < 1:
+                # already have enough
+                continue
+            affordable_quantity = min(needed_quantity, (self.read_money() // item_price))
+            self.buy_item(best_in_mart_id, affordable_quantity, item_price)
+            # reset cache and get items again
+            self._items_in_bag = None
+            bag_items = self.get_items_in_bag()
+            self.pyboy.set_memory_value(0xD31D, len(bag_items))
+            self.pyboy.set_memory_value(RAM.wBagSavedMenuItem.value, 0x0)
+            # print(f'Bought item: {best_in_mart_id} x {affordable_quantity}')
+        self.use_mart_count += 1
+        # reset item count to trigger scripted_manage_items
+        self._last_item_count = 0
+        return True
+
 
     '''
 def party_stat_sum():
