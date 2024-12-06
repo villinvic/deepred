@@ -1,6 +1,6 @@
 import numpy as np
 
-from deepred.polaris_env.pokemon_red.enums import EventFlag, Map
+from deepred.polaris_env.pokemon_red.enums import EventFlag, Map, ProgressionFlag
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
 
@@ -96,9 +96,14 @@ class FlagHistory(AdditionalMemoryBlock):
     ):
         if self._previous_event_flags is not None:
             new_events = np.argwhere(gamestate.event_flags-self._previous_event_flags == 1)
+            for e in new_events:
+                e = int(e[0])
+                for i, f in enumerate(ProgressionFlag):
+                    if i == e:
+                        print(f)
             for new_event in new_events:
                 self.flag_history.pop(0)
-                self.flag_history.append(new_event)
+                self.flag_history.append(new_event[0])
                 self.stepstamps.pop(0)
                 self.stepstamps.append(gamestate.step)
 

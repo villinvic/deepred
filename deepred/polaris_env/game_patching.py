@@ -110,7 +110,7 @@ def instantaneous_text_patch(
     ram[RamLocation.INSTANT_TEXT] = set_bit(ram[RamLocation.INSTANT_TEXT], 6)
 
 
-def nerf_spinners_path(
+def nerf_spinners_patch(
         ram,
         gamestate: GameState,
 ):
@@ -179,7 +179,7 @@ def freshwater_trade_patch(
         gamestate: GameState
 ):
     if gamestate.step == 1:
-        ram[0xD778] = set_bit(0xD778, 4)
+        ram[0xD778] = set_bit(ram[0x778], 4)
 
 
 def seafoam_island_patch(
@@ -200,7 +200,7 @@ def seafoam_island_patch(
             [0xD881, 0],
             [0xD881, 1],
         ]:
-            ram[address] = set_bit(address, bit)
+            ram[address] = set_bit(ram[address], bit)
 
 
 patches = {
@@ -226,7 +226,7 @@ class GamePatching:
         self.patches = []
         for patch in enabled_patches:
             if patch not in patches:
-                print(f"Unknown patch {patch}.")
+                print(f"WARNING: Unknown patch {patch}.")
                 continue
             self.patches.append(patches[patch])
 

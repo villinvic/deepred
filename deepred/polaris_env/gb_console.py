@@ -88,8 +88,7 @@ class GBConsole(PyBoy):
             map_history_length=map_history_length,
             flag_history_length=flag_history_length
         )
-        self._additional_memory: Union[None, AdditionalMemory] = None
-
+        self._additional_memory = self._additional_memory_maker()
         self._gamestate = GameState(self)
 
     def init_paths(
@@ -122,6 +121,7 @@ class GBConsole(PyBoy):
         self._step = 0
         self._additional_memory = self._additional_memory_maker()
         self._gamestate = self.tick(2)
+        self._additional_memory.update(self._gamestate)
         return self._gamestate
 
     def initialise_video(self):
@@ -301,11 +301,13 @@ class GBConsole(PyBoy):
             self,
             event: WindowEvent | CustomEvent
     ) -> GameState:
-        # TODO: clean up
+        # TODO: clean up, manage better additional memory
 
         if event == CustomEvent.ROLL_PARTY:
             self.agent_helper.roll_party(gamestate=self._gamestate)
-            return GameState(self)
+            gamestate = GameState(self)
+            self._additional_memory.update(gamestate)
+            return gamestate
 
         if self._gamestate.is_in_battle:
             finalise = self.handle_battle_event(event)
@@ -313,7 +315,14 @@ class GBConsole(PyBoy):
             finalise = self.handle_world_event(event)
 
         if finalise:
-            self.step_event(event)
+            gamestate = self.step_event(event)
+            self._additional_memory.update(gamestate)
+            return gamestate
+
+        gamestate = GameState(self)
+        self._additional_memory.update(gamestate)
+        return gamestate
+
 
     def handle_error(
             self,

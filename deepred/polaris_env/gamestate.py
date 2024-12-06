@@ -234,7 +234,7 @@ class GameState:
         :param addr: address (one index, or slice) where we want to read the RAM.
         :return: The memory value at the given addr as a double.
         """
-        if isinstance(addr, RamLocation):
+        if isinstance(addr, (RamLocation, int)):
             return 256 * self._read(addr) + self._read(addr + 1)
 
         s1 = slice(addr.start, addr.stop, 2)
@@ -584,7 +584,7 @@ class GameState:
         I feel like having every info about the opponent team is kind of cheating, but again, you can also cheat
         by checking the game online I guess.
         """
-        attributes = np.zeros((12, 15), np.float32)
+        attributes = np.zeros((12, 18), np.float32)
 
         for i in range(self.party_count):
             attributes[i] = self.party_pokemon_stats_at_index(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS,
@@ -803,7 +803,7 @@ class GameState:
             if item_type == BagItem.NO_ITEM:
                 break
             items.append(item_type)
-        return items + [BagItem.NO_ITEM] * (len(items) - 20)
+        return items + [BagItem.NO_ITEM] * (20 - len(items))
 
     @cproperty
     def ordered_bag_counts(self) -> List[int]:
@@ -816,7 +816,7 @@ class GameState:
             if item_count == 0:
                 break
             item_counts.append(item_count)
-        return item_counts + [BagItem.NO_ITEM] * (len(item_counts) - 20)
+        return item_counts + [BagItem.NO_ITEM] * (20 - len(item_counts))
 
 
     @cproperty
@@ -985,22 +985,24 @@ class GameState:
         # TODO: clarify whats going on here.
 
         visited_tiles_on_current_map = np.zeros((9, 10), dtype=np.uint8)
-        map_w, map_h = MapDimensions[self.map].shape
+        map_h, map_w = MapDimensions[self.map].shape
         pos_x, pos_y = self.pos_x, self.pos_y
 
-        true_top_left_x = pos_x - 4
-        adjust_x = 0
-        if true_top_left_x < 0:
-            adjust_x = -true_top_left_x
-        true_top_left_y = pos_y - 4
-        adjust_y = 0
-        if true_top_left_y < 0:
-            adjust_y = - true_top_left_y
+        cur_top_left_x = pos_x - 4
+        cur_top_left_y = pos_y - 4
+        cur_bottom_right_x = pos_x + 6
+        cur_bottom_right_y = pos_y + 5
+        top_left_x = max(0, cur_top_left_x)
+        top_left_y = max(0, cur_top_left_y)
+        bottom_right_x = min(map_w, cur_bottom_right_x)
+        bottom_right_y = min(map_h, cur_bottom_right_y)
 
-        top_left_x = max(0, true_top_left_x)
-        top_left_y = max(0, true_top_left_y)
-        bottom_right_x = min(map_w, pos_x + 6)
-        bottom_right_y = min(map_h, pos_x + 5)
+        adjust_x = 0
+        adjust_y = 0
+        if cur_top_left_x < 0:
+            adjust_x = -cur_top_left_x
+        if cur_top_left_y < 0:
+            adjust_y = -cur_top_left_y
 
         visited_tiles_on_current_map[
         adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x

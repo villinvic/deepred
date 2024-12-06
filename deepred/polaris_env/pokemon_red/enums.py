@@ -110,7 +110,7 @@ class RamLocation(IntEnum):
     # Game events
     # TODO: we can curate the events and only care about the most relevant ones. By default, we have 502 events.
     EVENT_START = 0xD747
-    EVENT_END = 0xD86F
+    EVENT_END = 0xD883
 
     INSTANT_TEXT = 0xD730 # wd730
     MENU_STATE = 0xFFB0 # hWY
@@ -118,7 +118,6 @@ class RamLocation(IntEnum):
     BOX_POKEMON_COUNT = 0xDA80
     BOX_POKEMON_START = 0xDA96
     BOX_POKEMON_SPECIES_START = 0xDA81
-
 
     BOX_NICKNAMES_START = 0xDE06
 

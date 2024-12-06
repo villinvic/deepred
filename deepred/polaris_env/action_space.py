@@ -16,8 +16,8 @@ class CustomEvent(IntEnum):
 human_input_dict = {
     "[A": WindowEvent.PRESS_ARROW_UP,
     "[B": WindowEvent.PRESS_ARROW_DOWN,
-    "[D": WindowEvent.PRESS_ARROW_RIGHT,
-    "[C": WindowEvent.PRESS_ARROW_LEFT,
+    "[D": WindowEvent.PRESS_ARROW_LEFT,
+    "[C": WindowEvent.PRESS_ARROW_RIGHT,
     "": WindowEvent.PRESS_BUTTON_A,
     "0": WindowEvent.PRESS_BUTTON_B,
     "5": WindowEvent.PRESS_BUTTON_START,
@@ -36,7 +36,6 @@ class PolarisRedActionSpace:
             enable_roll_party: bool = True,
             human_inputs: bool = False,
     ):
-
         """
         Represents the action space, as the interface between the bot and the GameBoy console.
         :param enable_start: Whether to enable the button start (can speed up learning, but may prevent learning some

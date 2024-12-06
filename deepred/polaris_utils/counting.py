@@ -15,7 +15,7 @@ def hash_function(
     combined_serialised = b''
     for component in components:
         if isinstance(component, int):
-            combined_serialised = combined_serialised + b'|' + component.to_bytes()
+            combined_serialised = combined_serialised + b'|' + component.to_bytes(8, "little")
         elif isinstance(component, str):
             combined_serialised = combined_serialised + b'|' + component.encode('utf-8')
         elif isinstance(component, Enum):

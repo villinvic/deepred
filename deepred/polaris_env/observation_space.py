@@ -85,11 +85,13 @@ class RamObservation(Observation):
         :param preprocess: we might need to not preprocess categorical inputs, if False, leaves the categorical value as
         is and stores the highest value possible in the box space's 'high' attribute. The size is used if multiple
         similar values should be observed.
+        # TODO: confusing for categorical values: dim should be one, change the domain instead
         """
 
         super().__init__(extractor)
         self.nature = nature
-        self.size = (size,) if isinstance(size, int) else size
+        self.size = size
+        self.shape = (size,) if isinstance(size, int) else size
         self.scale = scale
         low, high = domain
         self.domain = (low * scale, high * scale)
@@ -98,7 +100,10 @@ class RamObservation(Observation):
     def gym_spec(self) -> spaces.Box:
         if self.nature == ObsType.CATEGORICAL:
             if self.preprocess:
-                return spaces.Box(0, 1, self.size, dtype=np.uint8)
+                shape = (int(self.domain[1]),)
+                if self.size != 1:
+                    shape =  self.shape + shape
+                return spaces.Box(0, 1, shape, dtype=np.uint8)
             else:
                 # automatically infer best datatype:
                 high = int(self.domain[1])
@@ -106,13 +111,13 @@ class RamObservation(Observation):
                     dtype = np.uint8
                 else:
                     dtype = np.uint16
-                return spaces.Box(0, high, self.size, dtype=dtype)
+                return spaces.Box(0, high, self.shape, dtype=dtype)
 
         elif self.nature == ObsType.BINARY:
             # For now, we onehot categoricals from here, but we could one hot on the model side with tensorflow.
-            return spaces.Box(0, 1, self.size, dtype=np.uint8)
+            return spaces.Box(0, 1, self.shape, dtype=np.uint8)
         elif self.nature == ObsType.CONTINUOUS:
-            return spaces.Box(*self.domain, self.size, dtype=np.float32)
+            return spaces.Box(*self.domain, self.shape, dtype=np.float32)
         else:
             raise NotImplementedError(f"Observation type {self.nature} is not supported.")
 
@@ -129,8 +134,13 @@ class RamObservation(Observation):
                 input_array[self._offset: self._offset + self.size] = 0
                 input_array[self._offset + observed] = 1
             else:
-                input_array[self._offset: self._offset + self.size] = observed
+                assert self._offset == 0
+                input_array[:] = observed
         elif self.nature == ObsType.CONTINUOUS:
+            if isinstance(self.size, tuple):
+                assert self._offset == 0
+                input_array[:] = observed
+            else:
                 input_array[self._offset: self._offset + self.size] = np.clip(observed, *self.domain) * self.scale
         else:
             raise NotImplementedError(f"Observation type {self.nature} is not supported.")
@@ -149,19 +159,24 @@ class PixelsObservation(Observation):
         super().__init__(extractor)
         self.framestack = framestack
         self.stack_oldest_only = stack_oldest_only
-        h, w = downscaled_shape
-        self.downscaled_shape = (w, h) # we reverse w and h for opencv.
-        if self.stack_oldest_only:
-            h *= 2
+        self.downscaled_shape = downscaled_shape
+        if len(downscaled_shape) > 2:
+            self.stacked_shape = downscaled_shape
         else:
-            h *= framestack
-        self.stacked_shape = (h, w)
 
-        # needed if we use stack_oldest_only
-        if self.stack_oldest_only:
-            self._pixel_history = np.zeros(
-                (h*framestack, w), dtype=dtype
-            )
+            h, w = downscaled_shape
+            self.opencv_downscaled_shape = (w, h) # we reverse w and h for opencv.
+            if self.stack_oldest_only:
+                h *= 2
+            else:
+                h *= framestack
+            self.stacked_shape = (h, w)
+
+            # needed if we use stack_oldest_only
+            if self.stack_oldest_only:
+                self._pixel_history = np.zeros(
+                    (h*framestack, w), dtype=dtype
+                )
         self.dtype = dtype
 
     def gym_spec(self) -> spaces.Box:
@@ -174,13 +189,13 @@ class PixelsObservation(Observation):
             input_array: np.ndarray
     ):
         pixels = self._extractor(gamestate)
-        w, h = self.downscaled_shape
-        if pixels.shape == self.downscaled_shape:
+        h, w = self.downscaled_shape[-2:]
+        if pixels.shape == self.stacked_shape:
             downscaled = pixels
         else:
             downscaled = cv2.resize(
                 pixels,
-                self.downscaled_shape,
+                self.opencv_downscaled_shape,
                 interpolation=cv2.INTER_AREA,
             )
 
@@ -232,7 +247,7 @@ class PolarisRedObservationSpace:
             current_checkpoint=RamObservation(
                 extractor=lambda gamestate: gamestate.current_checkpoint,
                 nature=ObsType.CATEGORICAL,
-                size=len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids),
+                domain=(0,len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids)),
             ),
             visited_pokecenters=RamObservation(
                 extractor=lambda gamestate: gamestate.visited_pokemon_centers,
@@ -252,7 +267,7 @@ class PolarisRedObservationSpace:
             battle_type=RamObservation(
                 extractor=lambda gamestate: gamestate.battle_type,
                 nature=ObsType.CATEGORICAL,
-                size=3
+                domain=(0, 3),
             ),
             party_count=RamObservation(
                 extractor=lambda gamestate: gamestate.party_count,
@@ -265,7 +280,7 @@ class PolarisRedObservationSpace:
                 nature=ObsType.BINARY,
             ),
             better_pokemon_in_box=RamObservation(
-                extractor=lambda gamestate: gamestate.better_pokemon_in_box,
+                extractor=lambda gamestate: gamestate.has_better_pokemon_in_box,
                 nature=ObsType.BINARY,
             ),
             bag_full=RamObservation(
@@ -354,7 +369,7 @@ class PolarisRedObservationSpace:
         pokemon_type_ids_observation = RamObservation(
             extractor=lambda gamestate: gamestate.pokemon_types,
             nature=ObsType.CATEGORICAL,
-            size=12,
+            size=(12, 2),
             domain=(0, len(PokemonType)),
             preprocess=False
         )
@@ -362,7 +377,7 @@ class PolarisRedObservationSpace:
         pokemon_move_ids_observation = RamObservation(
             extractor=lambda gamestate: gamestate.pokemon_moves,
             nature=ObsType.CATEGORICAL,
-            size=12,
+            size=(12, 4),
             domain=(0, len(Move)),
             preprocess=False
         )
@@ -378,7 +393,7 @@ class PolarisRedObservationSpace:
         pokemon_stats_observation = RamObservation(
             extractor=lambda gamestate: gamestate.pokemon_attributes,
             nature=ObsType.CONTINUOUS,
-            size=(12, 15),
+            size=dummy_gamestate.pokemon_attributes.shape,
             scale=1., # everything was prescaled
             domain=(0., 1.),
         )
@@ -529,6 +544,7 @@ class PolarisRedObservationSpace:
         :return:
         """
 
+        # TODO: infinite recursion
         for observation_name, extractor in self.observations.items():
             output_file = dump_path.with_name(dump_path.stem + f"_{observation_name}")
             if isinstance(extractor, PixelsObservation):
@@ -541,6 +557,7 @@ class PolarisRedObservationSpace:
                     image_file = output_file.with_suffix(".png")
                     Image.fromarray(observations[observation_name]).save(image_file)
             elif isinstance(extractor, dict):
+                print(extractor)
                 self.dump_observations(
                     dump_path.with_name(dump_path.stem + f"_{observation_name}"), extractor
                 )
@@ -552,8 +569,12 @@ class PolarisRedObservationSpace:
 
 dtype_sizes = {
     np.float32: 128,
+    np.dtypes.Float32DType(): 128,
     np.int32: 64,
+    np.dtypes.Int32DType(): 64,
     np.uint16: 16,
-    np.uint8 : 8
+    np.dtypes.UInt16DType(): 64,
+    np.uint8 : 8,
+    np.dtypes.UInt8DType(): 64,
 }
 

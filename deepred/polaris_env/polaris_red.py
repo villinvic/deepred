@@ -18,7 +18,7 @@ import mediapy
 
 from gymnasium import spaces
 
-from deepred.polaris_env.action_space import PolarisRedActionSpace
+from deepred.polaris_env.action_space import PolarisRedActionSpace, CustomEvent
 from deepred.polaris_env.pokemon_red.enums import *
 from deepred.polaris_env.gb_console import GBConsole
 from deepred.polaris_env.metrics import PolarisRedMetrics
@@ -147,6 +147,12 @@ class PolarisRed(PolarisEnv):
     ) -> Tuple[dict, dict, dict, dict, dict]:
 
         event = self.input_interface.get_event(action_dict[0])
+        if event == CustomEvent.DUMP_FRAME:
+            self.observation_interface.dump_observations(
+                self.session_path / Path("human_dump"),
+                self.input_dict,
+            )
+            event = WindowEvent.PASS
         gamestate = self.console.process_event(event)
 
         self.observation_interface.inject(
