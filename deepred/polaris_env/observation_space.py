@@ -544,8 +544,9 @@ class PolarisRedObservationSpace:
         :return:
         """
 
-        # TODO: infinite recursion
+        # TODO: infinite recursion -> we interate over self.observations !!!
         for observation_name, extractor in self.observations.items():
+            print(observation_name)
             output_file = dump_path.with_name(dump_path.stem + f"_{observation_name}")
             if isinstance(extractor, PixelsObservation):
                 pixels = observations[observation_name]
@@ -557,7 +558,7 @@ class PolarisRedObservationSpace:
                     image_file = output_file.with_suffix(".png")
                     Image.fromarray(observations[observation_name]).save(image_file)
             elif isinstance(extractor, dict):
-                print(extractor)
+                print(extractor.keys())
                 self.dump_observations(
                     dump_path.with_name(dump_path.stem + f"_{observation_name}"), extractor
                 )
