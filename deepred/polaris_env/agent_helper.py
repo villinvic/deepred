@@ -239,7 +239,7 @@ class AgentHelper:
         This needs to interact with the emulator back and forth
         We pass the step function.
         We return True if any field move was used.
-        No Flash/Strenght as we do not need them.
+        No Flash/Strength as we do not need them.
         """
         return (
                 try_use_flute(gamestate, step_function)

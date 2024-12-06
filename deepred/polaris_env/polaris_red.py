@@ -30,7 +30,7 @@ from deepred.polaris_env.streaming import BotStreamer
 class PolarisRed(PolarisEnv):
     env_id = "PolarisRed"
 
-    # This environment was inspired from
+    # This environment was declined from
     # https://github.com/CJBoey/PokemonRedExperiments1/blob/master/baselines/boey_baselines2/red_gym_env.py#L2373
     # Although this is not a fork of their work, we employed many of their ideas.
 
@@ -38,16 +38,18 @@ class PolarisRed(PolarisEnv):
             self,
             env_index=-1,
             game_path: str= "faster_red.gbc",
-            episode_length=2048,
-            enable_start: bool = True,
-            enable_pass: bool = True,
-            downscaled_screen_shape: Tuple = (72, 80),
+            episode_length=2048, # 2048 is short.
+            enable_start: bool = False,
+            enable_pass: bool = False,
+            enable_roll_party: bool = True,
+            human_inputs: bool = False,
+            downscaled_screen_shape: Tuple = (36, 40),
             framestack: int = 3,
             stack_oldest_only: bool = False,
-            observed_ram: Tuple[str] = ("badges",),
-            observed_items: Tuple[BagItem] = (BagItem.POKE_BALL, BagItem.POTION),
             reward_scales: dict  | None = None,
             savestate: Union[None, str] = None,
+            map_history_length: int = 10,
+            flag_history_length: int = 10,
             enabled_patches: Tuple[str] = (),
             session_path: str = "red_tests",
             render: bool = True,
@@ -68,24 +70,8 @@ class PolarisRed(PolarisEnv):
 
         self.session_path.mkdir(exist_ok=True)
 
-        self.observation_interface = PolarisRedObservationSpace(
-            downscaled_screen_shape=downscaled_screen_shape,
-            framestack=framestack,
-            stack_oldest_only=stack_oldest_only,
-            observed_ram=observed_ram,
-            observed_items=observed_items
-        )
-
-        self.input_interface = PolarisRedActionSpace(
-            enable_start=enable_start,
-            enable_pass=enable_pass
-        )
-
-        self.action_space = self.input_interface.gym_spec
-        self.observation_space = self.observation_interface.gym_spec
-
-        self._console_maker = partial(
-            GBConsole,
+        # We need to setup the console here.
+        self.console = GBConsole(
             console_id=self.env_index,
             game_path=game_path,
             render=self.render,
@@ -94,15 +80,35 @@ class PolarisRed(PolarisEnv):
             record_skipped_frames=record_skipped_frame,
             output_dir=self.session_path / Path(f"console_{self.env_index}"),
             savestate=savestate,
+            map_history_length = map_history_length,
+            flag_history_length = flag_history_length,
             enabled_patches=enabled_patches,
             **config
         )
+        # We perform a reset + tick to get the gamestate.
+        self.console.reset()
+
+        self.observation_interface = PolarisRedObservationSpace(
+            downscaled_screen_shape=downscaled_screen_shape,
+            framestack=framestack,
+            stack_oldest_only=stack_oldest_only,
+            dummy_gamestate=self.console.tick()
+        )
+
+        self.input_interface = PolarisRedActionSpace(
+            enable_start=enable_start,
+            enable_pass=enable_pass,
+            enable_roll_party=enable_roll_party,
+            human_inputs=human_inputs,
+        )
+
+        self.action_space = self.input_interface.gym_spec
+        self.observation_space = self.observation_interface.gym_spec
+
 
         self.stream = stream
         if stream:
             self.streamer = BotStreamer(self.env_index)
-
-        self.console: Union[GBConsole, None] = None
 
         self.metrics : Union[PolarisRedMetrics, None] = None
         self.reward_scales = reward_scales
@@ -116,8 +122,6 @@ class PolarisRed(PolarisEnv):
             return_info: bool = False,
             options: dict[str, dict] = None,
     ) -> Tuple[Dict[int, dict], dict]:
-        if self.console is None:
-            self.console = self._console_maker()
 
         gamestate = self.console.reset()
         self.metrics = PolarisRedMetrics()
@@ -143,7 +147,7 @@ class PolarisRed(PolarisEnv):
     ) -> Tuple[dict, dict, dict, dict, dict]:
 
         event = self.input_interface.get_event(action_dict[0])
-        gamestate = self.console.step_event(event)
+        gamestate = self.console.process_event(event)
 
         self.observation_interface.inject(
             gamestate,

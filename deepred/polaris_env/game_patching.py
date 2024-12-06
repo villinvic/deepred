@@ -76,6 +76,7 @@ def infinite_time_safari_patch(
         - Surf and Strength
         - Surf and Gold teeth
     """
+
     if (
         not Map.SAFARI_ZONE_EAST <=gamestate.map<= Map.SAFARI_ZONE_NORTH_REST_HOUSE
         or
@@ -95,6 +96,7 @@ def infinite_time_safari_patch(
         return
 
     ram[RamLocation.SAFARI_STEPS] = 1
+
 
 def instantaneous_text_patch(
         ram,

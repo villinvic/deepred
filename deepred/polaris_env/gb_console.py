@@ -1,3 +1,4 @@
+from functools import partial
 from pathlib import Path
 from typing import Union, Tuple
 
@@ -38,6 +39,8 @@ class GBConsole(PyBoy):
             record_skipped_frames: bool = False,
             output_dir: Path = Path("deepred_console"),
             savestate: Union[None, str] = None,
+            map_history_length: int = 10,
+            flag_history_length: int = 10,
             enabled_patches: Tuple[str] = (),
             **kwargs
     ):
@@ -60,7 +63,7 @@ class GBConsole(PyBoy):
             window='SDL2' if render else 'null',
             **kwargs
         )
-        self._ram_helper = self.game_wrapper()
+        self._ram_helper = self.game_wrapper
 
         self.game_patcher = GamePatching(enabled_patches)
         self.agent_helper = AgentHelper()
@@ -80,7 +83,13 @@ class GBConsole(PyBoy):
         self._savestate = savestate
         self._frame = 0
         self._step = 0
-        self._additional_memory : Union[None, AdditionalMemory] = None
+        self._additional_memory_maker = partial(
+            AdditionalMemory,
+            map_history_length=map_history_length,
+            flag_history_length=flag_history_length
+        )
+        self._additional_memory: Union[None, AdditionalMemory] = None
+
         self._gamestate = GameState(self)
 
     def init_paths(
@@ -111,7 +120,7 @@ class GBConsole(PyBoy):
 
         self._frame = 0
         self._step = 0
-        self._additional_memory : Union[None, AdditionalMemory] = None
+        self._additional_memory = self._additional_memory_maker()
         self._gamestate = self.tick(2)
         return self._gamestate
 
@@ -182,11 +191,9 @@ class GBConsole(PyBoy):
             ):
                 frames_to_skip += 33
 
-            # map = gamestate.map
-            # in_battle = gamestate.is_in_battle
             self._gamestate = gamestate
             if self._gamestate.is_skippable_frame():
-                total_frames_ticked -= skip_count * 0.75
+                total_frames_ticked -= skip_count * 0.75 # make sure we do not skip forever.
                 additional_skip += 1
                 if additional_skip > 500:
                     self.handle_error("stuck skipping.")
@@ -298,7 +305,7 @@ class GBConsole(PyBoy):
 
         if event == CustomEvent.ROLL_PARTY:
             self.agent_helper.roll_party(gamestate=self._gamestate)
-            return
+            return GameState(self)
 
         if self._gamestate.is_in_battle:
             finalise = self.handle_battle_event(event)

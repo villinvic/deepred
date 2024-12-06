@@ -75,8 +75,8 @@ class GameState:
         self._ram = console.memory
         self._ram_helper = console._ram_helper
         self._frame = console._frame
-        self.step = console.step
-        self._additional_memory: AdditionalMemory = console.additional_memory
+        self.step = console._step
+        self._additional_memory: AdditionalMemory = console._additional_memory
         self.screen = np.uint8(console.screen.ndarray[:, :, 0])
 
 

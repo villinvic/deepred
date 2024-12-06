@@ -10,6 +10,22 @@ import select
 
 class CustomEvent(IntEnum):
     ROLL_PARTY = 0
+    DUMP_FRAME = 1
+
+
+human_input_dict = {
+    "[A": WindowEvent.PRESS_ARROW_UP,
+    "[B": WindowEvent.PRESS_ARROW_DOWN,
+    "[D": WindowEvent.PRESS_ARROW_RIGHT,
+    "[C": WindowEvent.PRESS_ARROW_LEFT,
+    "": WindowEvent.PRESS_BUTTON_A,
+    "0": WindowEvent.PRESS_BUTTON_B,
+    "5": WindowEvent.PRESS_BUTTON_START,
+    "p": WindowEvent.PASS,
+    "r": CustomEvent.ROLL_PARTY,
+    "d": CustomEvent.DUMP_FRAME,
+}
+
 
 class PolarisRedActionSpace:
 
@@ -18,7 +34,9 @@ class PolarisRedActionSpace:
             enable_start: bool = True,
             enable_pass: bool = False,
             enable_roll_party: bool = True,
+            human_inputs: bool = False,
     ):
+
         """
         Represents the action space, as the interface between the bot and the GameBoy console.
         :param enable_start: Whether to enable the button start (can speed up learning, but may prevent learning some
@@ -39,23 +57,14 @@ class PolarisRedActionSpace:
             actions.append(WindowEvent.PRESS_BUTTON_START)
         if enable_pass:
             actions.append(WindowEvent.PASS)
-        if enable_swap:
+        if enable_roll_party:
             actions.append(CustomEvent.ROLL_PARTY)
+
+        self.human_inputs = human_inputs
+        self.human_input_queue = []
 
         self.actions = actions
         self.gym_spec = Discrete(len(self.actions))
-
-        self.key_to_action = {
-            "[A": 3,    # Up arrow
-            "[B": 0,  # Down arrow
-            "[D": 1,  # Right arrow
-            "[C": 2,  # Left arrow
-            "": 4,
-            "0": 5,
-            "5": 6,
-            "6": 7,
-            "7": 8,
-        }
 
     def get_event(
             self,
@@ -64,20 +73,25 @@ class PolarisRedActionSpace:
         """
         Returns the event corresponding to the selected action
         """
+        if self.human_inputs:
+            return self.human_input()
+
         return self.actions[action]
 
     def human_input(
             self
-    ) -> int:
+    ) -> WindowEvent:
         """
         Reads user input from stdin, and maps it to an action.
         Blocks until enter was pressed.
         """
-        inputs = input("input:").split("\x1b")
-        print()
-        if len(inputs) > 1:
-            inputs.pop(0)
-        return self.key_to_action.get(inputs[-1], 7)
+        if len(self.human_input_queue) == 0:
+            inputs = input("input:").split("\x1b")
+            print()
+            if len(inputs) > 1:
+                inputs.pop(0)
+            self.human_input_queue = inputs
+        return human_input_dict.get(self.human_input_queue.pop(0), WindowEvent.PASS)
 
 
 

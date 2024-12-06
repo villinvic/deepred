@@ -10,9 +10,8 @@ import tree
 from PIL import Image
 from gymnasium import spaces
 from gymnasium.spaces import Box
-from tensorflow.python.keras.backend import dtype
 
-from deepred.polaris_env.pokemon_red.enums import Map, BagItem, ProgressionEvents, Pokemon, PokemonType, Move
+from deepred.polaris_env.pokemon_red.enums import Map, BagItem, Pokemon, PokemonType, Move, ProgressionFlag
 from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
@@ -166,8 +165,8 @@ class PixelsObservation(Observation):
         self.dtype = dtype
 
     def gym_spec(self) -> spaces.Box:
-        high = 255 if self.dtype ==
-        return spaces.Box(low=0, high=255, shape=self.stacked_shape, dtype=self.dtype)
+        high = dtype_sizes[self.dtype]**2 - 1
+        return spaces.Box(low=0, high=high, shape=self.stacked_shape, dtype=self.dtype)
 
     def to_obs(
             self,
@@ -208,8 +207,6 @@ class PolarisRedObservationSpace:
             downscaled_screen_shape: Tuple,
             framestack: int,
             stack_oldest_only: bool,
-            observed_ram: Tuple[str],
-            observed_items: Tuple[BagItem],
             dummy_gamestate: GameState,
     ):
         """
@@ -217,19 +214,7 @@ class PolarisRedObservationSpace:
         :param downscaled_screen_shape: final shape of the pixel observation after downscaled.
         :param framestack: number of frames to stack on top of each other for pixel observations.
         :param stack_oldest_only: whether to only stack the oldest frame in the stack on top of the current frame.
-        :param observed_ram: list of ram observations to include into the final observation.
-        :param observed_items: list of bag items to include into the final observation: c.f. the BagItem enum.
         """
-
-        def extract_bag_items(gamestate: GameState):
-            bag_items = gamestate.bag_items
-            return [bag_items.get(key, 0) for key in observed_items]
-
-        def scaled_position(gamestate: GameState):
-            map_w, map_h = MapDimensions[gamestate.map]
-            x = gamestate.pos_x
-            y = gamestate.pos_y
-            return x / map_w, y / map_h
 
         # TODO: allow auto inference of dimensions, rather than passing len of ...
         base_ram_observations = dict(
@@ -402,7 +387,7 @@ class PolarisRedObservationSpace:
             extractor=lambda gamestate: gamestate.last_triggered_flags,
             nature=ObsType.CATEGORICAL,
             size=dummy_gamestate._additional_memory.flag_history.flag_history_length,
-            domain=(0, len(ProgressionEvents)),
+            domain=(0, len(ProgressionFlag)),
             preprocess=False
         )
 
@@ -563,7 +548,6 @@ class PolarisRedObservationSpace:
                 log_file = output_file.with_suffix(".log")
                 with open(log_file, "w") as f:
                     f.write(str(observations[observation_name]))
-
 
 
 dtype_sizes = {

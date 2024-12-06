@@ -1,7 +1,6 @@
 import numpy as np
 
 from deepred.polaris_env.pokemon_red.enums import EventFlag, Map
-from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
 
@@ -9,7 +8,7 @@ class AdditionalMemoryBlock:
 
     def update(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         """
         Updates the memory object
@@ -29,7 +28,7 @@ class VisitedTiles(AdditionalMemoryBlock):
 
     def update(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         """
         Keeps track of tiles previously visited.
@@ -46,7 +45,7 @@ class VisitedTiles(AdditionalMemoryBlock):
 
     def get(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         """
         recent visited tiles are set to 255, decrementing to 0 for each event that was triggered since the visit to the
@@ -67,7 +66,7 @@ class PokecenterCheckpoints(AdditionalMemoryBlock):
 
     def update(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         last_checkpoint = gamestate.current_checkpoint
         if last_checkpoint not in self.pokecenter_ids:
@@ -93,7 +92,7 @@ class FlagHistory(AdditionalMemoryBlock):
 
     def update(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         if self._previous_event_flags is not None:
             new_events = np.argwhere(gamestate.event_flags-self._previous_event_flags == 1)
@@ -123,7 +122,7 @@ class MapHistory(AdditionalMemoryBlock):
 
     def update(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         if gamestate.map in self.map_history:
             return
@@ -145,7 +144,7 @@ class GoodPokemonInBoxCache(AdditionalMemoryBlock):
 
     def update(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         if gamestate.box_pokemon_count == self._prev_box_count:
             return
@@ -182,7 +181,7 @@ class AdditionalMemory(AdditionalMemoryBlock):
 
     def update(
             self,
-            gamestate: GameState
+            gamestate: "GameState"
     ):
         for block in self.blocks:
             block.update(gamestate)
