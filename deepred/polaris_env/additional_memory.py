@@ -138,10 +138,7 @@ class GoodPokemonInBoxCache(AdditionalMemoryBlock):
             self,
     ):
         """
-        Keeps track of the latest maps visited.
-        # TODO: they also give the number of steps since each map was last visited.
-
-        :param map_history_length: Length of the history
+        Checks when number of pokemons in boxes changes if we have a better pokemon there
         """
         self.better_pokemon_in_box = False
         self._prev_box_count = 0

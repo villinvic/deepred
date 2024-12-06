@@ -6,13 +6,6 @@ from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimensi
 from deepred.polaris_env.gamestate import GameState
 
 
-# TODO:
-#   -game_path
-#   -items:
-#       -buy
-#       -replace in bag
-
-
 def to_bcd(amount):
     """
     :param amount: amount to convert into bcd

@@ -1,16 +1,17 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Tuple
 
 import numpy as np
 from PIL import Image
 
 from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.pokemon_red.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
-    DataStructDimension, Badges, BattleType, ProgressionFlag, Orientation
+    DataStructDimension, Badges, BattleType, ProgressionFlag, Orientation, Move
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 from deepred.polaris_env.pokemon_red.map_warps import MapWarps, MapWarp, NamedWarpIds
 from deepred.polaris_env.pokemon_red.mart_info import MartInfos, MartInfo
+from deepred.polaris_env.pokemon_red.move_info import MovesInfo
 from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats, PokemonBaseStats
 from deepred.polaris_env.utils import cproperty
 
@@ -509,8 +510,7 @@ class GameState:
             chosen_mon = self._read(RamLocation.POKEMON_SWAPPING_POS)
             return chosen_mon - 1
 
-
-    def party_pokemon_obs(
+    def party_pokemon_stats_at_index(
             self,
             start_address: int,
             party_pokemon: bool,
@@ -520,7 +520,7 @@ class GameState:
         """
         Returns a list of pokemon attributes (15) for party pokemons, or opponent pokemons that are not battling.
         TODO: think if we move this kind of function into the observation space module...
-        TODO: Add one hot for pokemon position.
+        TODO: Add one hot for pokemon position ? Thats what they did but not necessary.
         :param start_address: starting address of the concerned pokemon.
         :param party_pokemon: is it a pokemon from our party ?
         :param position: position of the pokemon in the team.
@@ -541,12 +541,12 @@ class GameState:
             int(wild_pokemon or (
                 (party_pokemon and position == self._read(RamLocation.PARTY_SENT_OUT))
                 or
-                position == self._read(RamLocation.OPPONENT_POKEMON_SENT_OUT) # should always be False ?
+                position == self._read(RamLocation.OPPONENT_POKEMON_SENT_OUT)  # should always be False ?
             )), # is sent out ?
-            int(party_pokemon and position == self.swapping_position) # are we about to swap with this pokemon ?
+            int(party_pokemon and position == self.swapping_position)  # are we about to swap with this pokemon ?
         ] + pokemon_status(self._read(start_address + 4))
 
-    def opponent_sent_out_pokemon_obs(
+    def opponent_sent_out_pokemon_stats_at_index(
             self,
             start_address: int,
             party_pokemon: bool,
@@ -587,11 +587,11 @@ class GameState:
         attributes = np.zeros((12, 15), np.float32)
 
         for i in range(self.party_count):
-            attributes[i] = self.party_pokemon_obs(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS,
+            attributes[i] = self.party_pokemon_stats_at_index(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS,
                                                    party_pokemon=True, position=i, wild_pokemon=False)
 
         if self.battle_type == BattleType.WILD:
-            attributes[6] = self.opponent_sent_out_pokemon_obs(
+            attributes[6] = self.opponent_sent_out_pokemon_stats_at_index(
                         RamLocation.WILD_POKEMON_SPECIES,  # this is also the address for opponent sent out pokemons.
                         party_pokemon=False,
                         position=0,
@@ -601,14 +601,14 @@ class GameState:
         elif self.battle_type == BattleType.TRAINER:
             for i in range(self.opponent_party_count):
                 if i == self._read(RamLocation.OPPONENT_POKEMON_SENT_OUT):
-                    attributes[i + 6] = self.opponent_sent_out_pokemon_obs(
+                    attributes[i + 6] = self.opponent_sent_out_pokemon_stats_at_index(
                         RamLocation.WILD_POKEMON_SPECIES,  # this is also the address for opponent sent out pokemons.
                         party_pokemon=False,
                         position=i,
                         wild_pokemon=False,
                     )
                 else:
-                    attributes[i + 6] = self.party_pokemon_obs(
+                    attributes[i + 6] = self.party_pokemon_stats_at_index(
                         RamLocation.OPPONENT_POKEMON_0_SPECIES,  # this is also the address for opponent sent out pokemons.
                         party_pokemon=False,
                         position=i,
@@ -616,7 +616,6 @@ class GameState:
                     )
 
         return attributes
-
 
     @cproperty
     def textbox_id(self) -> int:
@@ -667,7 +666,6 @@ class GameState:
         """
         return self._read(RamLocation.MENU_ITEM_ID)
 
-
     @cproperty
     def start_menu_item(self) -> StartMenuItem:
         """
@@ -683,8 +681,6 @@ class GameState:
     # def party_hp(self) -> List[float]:
     #     """
     #     The current party pokemon health fractions (0 is fainted, 1 is full hp).
-    #     # TODO: handle pokemon indices between game and battles (they use different rams)
-    #     # https://datacrystal.tcrf.net/wiki/Pok%C3%A9mon_Red_and_Blue/RAM_map#Battle_2
     #     """
     #     return [ self._read_double(curr_hp_addr) / (self._read_double(max_hp_addr) + 1e-8)
     #     # Addresses are not adjacent.
@@ -789,6 +785,14 @@ class GameState:
         return self._read(RamLocation.POS_Y)
 
     @cproperty
+    def scaled_coordinates(self) -> Tuple[float, float]:
+        # 2 elements
+        map_w, map_h = MapDimensions[self.map].shape
+
+        return self.pos_x / map_w, self.pos_y / map_h
+
+
+    @cproperty
     def ordered_bag_items(self) -> List[BagItem]:
         """
         Returns the bag content, ordered.
@@ -829,11 +833,11 @@ class GameState:
         return bag_items
 
     @cproperty
-    def bag_full(self) -> bool:
+    def bag_count(self) -> bool:
         """
         Is the bag full M
         """
-        return self._read(RamLocation.BAG_COUNT) >= 20
+        return self._read(RamLocation.BAG_COUNT)
 
     @cproperty
     def player_orientation(self) -> Orientation:
@@ -1175,7 +1179,24 @@ class GameState:
             box_pokemon_stats.append(pokemon_stats)
             
         return box_pokemon_stats
-        
+
+    @cproperty
+    def focused_pokemon(self) -> int:
+        return self._read(RamLocation.WHICH_POKEMON)
+
+    @cproperty
+    def pokemon_move_learning_powers(self) -> Tuple[List[float], float]:
+        """
+        Returns the move powers of the pokemon currently learning a move
+        """
+        ptypes = [self._read(RamLocation.PARTY_0_TYPE0 + (self.focused_pokemon * DataStructDimension.POKEMON_STATS) + i)
+                  for i in range(2)]
+        move_powers = [
+            MovesInfo[Move(self._read(RamLocation.WHICH_POKEMON_LEARNED_MOVES + i))].actual_power(ptypes)
+            for i in range(4)]
+        new_move_power = MovesInfo[Move(self._read(RamLocation.MOVE_TO_LEARN))].actual_power(ptypes)
+        return move_powers, new_move_power
+
     @cproperty
     def box_pokemon_stat_sums(self) -> List[int]:
         """

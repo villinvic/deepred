@@ -144,6 +144,7 @@ class PixelsObservation(Observation):
             downscaled_shape: Tuple,
             framestack: int = 1,
             stack_oldest_only: bool = False,
+            dtype=np.uint8,
     ):
 
         super().__init__(extractor)
@@ -160,11 +161,13 @@ class PixelsObservation(Observation):
         # needed if we use stack_oldest_only
         if self.stack_oldest_only:
             self._pixel_history = np.zeros(
-                (h*framestack, w), dtype=np.uint8
+                (h*framestack, w), dtype=dtype
             )
+        self.dtype = dtype
 
     def gym_spec(self) -> spaces.Box:
-        return spaces.Box(low=0, high=255, shape=self.stacked_shape, dtype=np.uint8)
+        high = 255 if self.dtype ==
+        return spaces.Box(low=0, high=255, shape=self.stacked_shape, dtype=self.dtype)
 
     def to_obs(
             self,
@@ -228,23 +231,8 @@ class PolarisRedObservationSpace:
             y = gamestate.pos_y
             return x / map_w, y / map_h
 
-
-        #         obs.extend(self.get_battle_status_obs())
-        #         pokemon_count = self.read_num_poke()
-        #         obs.extend([self.scaled_encoding(pokemon_count, 6)])  # number of pokemon
-        #         obs.extend([1 if pokemon_count == 6 else 0])  # party full
-        #         obs.extend([self.scaled_encoding(self.read_m(0xD31D), 20)])  # bag num items
-        #         obs.extend(self.get_bag_full_obs())  # bag full
-        #         obs.extend(self.get_last_coords_obs())  # last coords x, y
-        #         obs.extend([self.get_num_turn_in_battle_obs()])  # num turn in battle
-        #         obs.extend(self.get_stage_obs())  # stage manager
-        #         obs.extend(self.get_level_manager_obs())  # level manager
-        #         obs.extend(self.get_is_box_mon_higher_level_obs())  # is box mon higher level
-        #         # obs.extend(self.get_reward_check_obs())  # reward check
-
         # TODO: allow auto inference of dimensions, rather than passing len of ...
         base_ram_observations = dict(
-            # TODO: align with baseline
             badges=RamObservation(
                 extractor=lambda gamestate: gamestate.badges,
                 nature=ObsType.BINARY,
@@ -276,15 +264,10 @@ class PolarisRedObservationSpace:
                 nature=ObsType.BINARY,
                 size=len(dummy_gamestate.hms),
             ),
-            in_battle=RamObservation(
-                extractor=lambda gamestate: gamestate.is_in_battle,
-                nature=ObsType.BINARY,
-            ),
-
             battle_type=RamObservation(
                 extractor=lambda gamestate: gamestate.battle_type,
                 nature=ObsType.CATEGORICAL,
-                size=2
+                size=3
             ),
             party_count=RamObservation(
                 extractor=lambda gamestate: gamestate.party_count,
@@ -292,18 +275,31 @@ class PolarisRedObservationSpace:
                 scale=1/6,
                 domain=(1/6, 1.)
             ),
-            party_full = RamObservation(
+            party_full=RamObservation(
                 extractor=lambda gamestate: int(gamestate.party_count == 6),
                 nature=ObsType.BINARY,
             ),
-            better_pokemon_in_box = RamObservation(
+            better_pokemon_in_box=RamObservation(
                 extractor=lambda gamestate: gamestate.better_pokemon_in_box,
                 nature=ObsType.BINARY,
             ),
-            bag_full = RamObservation(
-                extractor=lambda gamestate: int(gamestate.bag_full),
+            bag_full=RamObservation(
+                extractor=lambda gamestate: gamestate.bag_count == 20,
                 nature=ObsType.BINARY
-            )
+            ),
+            bag_count=RamObservation(
+                extractor=lambda gamestate: gamestate.bag_count,
+                nature=ObsType.CONTINUOUS,
+                scale=1/20,
+                domain=(0., 20.),
+            ),
+            coordinates=RamObservation(
+                extractor=lambda gamestate: gamestate.scaled_coordinates,
+                nature=ObsType.CONTINUOUS,
+                size=2,
+                scale=1,
+                domain=(0., 1.),
+            ),
             # Optional addons
             # battle turns
         )
@@ -327,12 +323,14 @@ class PolarisRedObservationSpace:
 
         sprite_map_observation = PixelsObservation(
             extractor=lambda gamestate: gamestate.sprite_map,
-            downscaled_shape=dummy_gamestate.sprite_map.shape
+            downscaled_shape=dummy_gamestate.sprite_map.shape,
+            dtype=np.uint16,
         )
 
         warp_map_observation = PixelsObservation(
             extractor=lambda gamestate: gamestate.warp_map,
-            downscaled_shape=dummy_gamestate.warp_map.shape
+            downscaled_shape=dummy_gamestate.warp_map.shape,
+            dtype=np.uint16,
         )
 
         last_visited_map_ids_observation = RamObservation(
@@ -358,7 +356,6 @@ class PolarisRedObservationSpace:
             scale=1/10,
             domain=(0., 10.),
         )
-
 
         # I think this is not needed, as the id provides no additional information when we are already observing stats, moves, etc.
         pokemon_ids_observation = RamObservation(
@@ -496,7 +493,7 @@ class PolarisRedObservationSpace:
     def _to_gym_space(
             self,
             observation_spaces,
-            flatten = False,
+            flatten=False,
     ) -> spaces.Dict:
         """
         Recursively converts a dictionary of dictionaries into a gym.spaces.Dict.
@@ -515,7 +512,12 @@ class PolarisRedObservationSpace:
                             low = np.concatenate([gym_spec.low for gym_spec in gym_specs], axis=0)
                             high = np.concatenate([gym_spec.high for gym_spec in gym_specs], axis=0)
                             shape = low.shape
-                            return Box(low, high, shape, gym_specs[0].dtype)
+                            dtype = gym_specs[0].dtype
+                            for gym_spec in gym_specs[1:]:
+                                if dtype_sizes[gym_spec.dtype] > dtype_sizes[dtype]:
+                                    dtype = gym_spec.dtype
+
+                            return Box(low, high, shape, dtype)
 
                         gym_space_dict[key] = concat_gym_boxes(values)
 
@@ -564,5 +566,10 @@ class PolarisRedObservationSpace:
 
 
 
-
+dtype_sizes = {
+    np.float32: 128,
+    np.int32: 64,
+    np.uint16: 16,
+    np.uint8 : 8
+}
 

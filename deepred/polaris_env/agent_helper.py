@@ -111,18 +111,10 @@ class AgentHelper:
         We automatically replace weaker moves
         :return Whether we should learn or not the move.
         """
-        # TODO: we should move some of this to the gamestate class.
-        party_pos = gamestate._read(RamLocation.WHICH_POKEMON)
-        ptypes = [gamestate._read(RamLocation.PARTY_0_TYPE0 + (party_pos * DataStructDimension.POKEMON_STATS) + i)
-                  for i in range(2)]
-        move_powers = [
-            MovesInfo[Move(gamestate._read(RamLocation.WHICH_POKEMON_LEARNED_MOVES + i))].actual_power(ptypes)
-            for i in range(4)]
+        learned_move_powers, new_move_power = gamestate.pokemon_move_learning_powers
 
-        new_move_power = MovesInfo[Move(gamestate._read(RamLocation.MOVE_TO_LEARN))].actual_power(ptypes)
-
-        argmin_move = np.argmin(move_powers)
-        if new_move_power > move_powers[argmin_move]:
+        argmin_move = np.argmin(learned_move_powers)
+        if new_move_power > learned_move_powers[argmin_move]:
             gamestate._ram[RamLocation.MENU_ITEM_ID] = argmin_move
             return True
         else:

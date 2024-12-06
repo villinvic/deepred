@@ -3,8 +3,8 @@ from deepred.polaris_env.pokemon_red.enums import Map
 
 
 class MapDimension(NamedTuple):
-    width: int = 50
-    height: int = 50
+    width: int = 45 # those default values are the maximums.
+    height: int = 72
 
 
     @property
