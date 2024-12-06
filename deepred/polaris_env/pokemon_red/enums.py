@@ -145,6 +145,7 @@ class RamLocation(IntEnum):
     BATTLE_SAVED_ITEM = 0xCC2D
     BAG_SAVED_ITEM = 0xCC2C
     SCROLL_OFFSET_VALUE = 0xCC36
+    FIELD_MOVE = 0xCD3D
 
 
 
@@ -168,6 +169,9 @@ class Orientation(IntEnum):
     LEFT = 8
     RIGHT = 12
 
+class FieldMove(IntEnum):
+    CUT = 1
+    SURF = 3
 
 class Badges(IntEnum):
     BOULDER = 0
@@ -179,6 +183,27 @@ class Badges(IntEnum):
     VOLCANO = 6
     EARTH   = 7
     
+class PokemonType(IntEnum):
+    NORMAL       = 0x00
+    FIGHTING     = 0x01
+    FLYING       = 0x02
+    POISON       = 0x03
+    GROUND       = 0x04
+    ROCK         = 0x05
+    BIRD         = 0x06
+    BUG          = 0x07
+    GHOST        = 0x08
+    # Unused types here
+    ...
+    # 
+    FIRE         = 0x14
+    WATER        = 0x15
+    GRASS        = 0x16
+    ELECTRIC     = 0x17
+    PSYCHIC_TYPE = 0x18
+    ICE          = 0x19
+    DRAGON       = 0x1A
+
     
 class TileSet(IntEnum):
     
@@ -206,6 +231,10 @@ class TileSet(IntEnum):
     TILESET_21           = 21
     TILESET_22           = 22
     TILESET_23           = 23
+
+# Tilesets where there is water
+WaterTilesets = [TileSet.OVERWORLD, TileSet.FOREST, TileSet.TILESET_5, TileSet.GYM, TileSet.TILESET_13,
+                                 TileSet.VERMILION_PORT, TileSet.TILESET_17, TileSet.TILESET_22, TileSet.TILESET_23]
 
 
 

@@ -11,6 +11,7 @@ from deepred.polaris_env.pokemon_red.enums import StartMenuItem, Map, RamLocatio
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 from deepred.polaris_env.pokemon_red.map_warps import MapWarps, MapWarp, NamedWarpIds
 from deepred.polaris_env.pokemon_red.mart_info import MartInfos, MartInfo
+from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats, PokemonBaseStats
 from deepred.polaris_env.utils import cproperty
 
 B = 256
@@ -20,7 +21,10 @@ EVENT_ADDRESS_ARRAY = np.array([
     e.value for e in ProgressionFlag
 ])
 
+stats_level_scale = 50
+
 class GameState:
+    
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -529,7 +533,7 @@ class GameState:
             int(hp > 0),  # knocked out ?
             hp / max_hp,
             max_hp,
-            self._read(start_address + 33) / 100, # levels
+            self._read(start_address + 33) / 100, # level
             self._read_double(start_address + 36) / 134, # attack
             self._read_double(start_address + 38) / 180,  # defense
             self._read_double(start_address + 40) / 140,  # speed
@@ -573,9 +577,10 @@ class GameState:
             0 # TODO: does this make sense ?
         ] + pokemon_status(self._read(start_address + 4))
 
+    @cproperty
     def pokemon_attributes(self) -> np.ndarray:
         """
-        An array of shape (12, 15) holding attributes for all pokemons.
+        An array of shape (12, 15) holding attributes for all pokemons (party and opponent).
         I feel like having every info about the opponent team is kind of cheating, but again, you can also cheat
         by checking the game online I guess.
         """
@@ -1124,6 +1129,128 @@ class GameState:
         maps[6] = self.visited_tiles
 
         return maps
+    
+    @cproperty
+    def box_pokemon_stats(self) -> List[PokemonStats]:
+        """
+        List of stats of the box pokemons
+        """
+        box_pokemon_stats = []
+        for i in range(self.box_pokemon_count):
+            offset = RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS
+            species = self._read(offset)
+            level = self._read(offset + 3)
+            exp = self._read_triple(offset + 14)
+            hp_ev = self._read_double(offset + 17)
+            atk_ev = self._read_double(offset + 19)
+            def_ev = self._read_double(offset + 21)
+            spd_ev = self._read_double(offset + 23)
+            spc_ev = self._read_double(offset + 25)
+            atk_def_iv = self._read(offset + 27)
+            spd_spc_iv = self._read(offset + 28)
+
+            atk_iv = atk_def_iv >> 4
+            def_iv = atk_def_iv & 0xF
+            spd_iv = spd_spc_iv >> 4
+            spc_iv = spd_spc_iv & 0xF
+
+            hp_iv = 0
+            hp_iv += 8 if atk_iv % 2 == 1 else 0
+            hp_iv += 4 if def_iv % 2 == 1 else 0
+            hp_iv += 2 if spd_iv % 2 == 1 else 0
+            hp_iv += 1 if spc_iv % 2 == 1 else 0
+
+            pokemon_stats = PokemonStats(
+                pokemon=Pokemon(species),
+                level=level,
+                exp=exp,
+                evs=PokemonBaseStats(
+                    hp=hp_ev, attack=atk_ev, defense=def_ev, speed=spd_ev, special=spc_ev
+                ),
+                ivs=PokemonBaseStats(
+                    hp=hp_iv, attack=atk_iv, defense=def_iv, speed=spd_iv, special=spc_iv
+
+                )
+            )
+            box_pokemon_stats.append(pokemon_stats)
+            
+        return box_pokemon_stats
+        
+    @cproperty
+    def box_pokemon_stat_sums(self) -> List[int]:
+        """
+        List of stat sums of the box pokemons
+        """
+        return [box_pokemon.scale(level=stats_level_scale).sum() for box_pokemon in self.box_pokemon_stats]
+
+    @cproperty
+    def best_box_pokemon_index(self) -> int:
+        """
+        Index of the pokemon with the highest stat sum in the box
+        """
+        return 0 if self.box_pokemon_count == 0 else np.argmax(self.box_pokemon_stat_sums)
+        
+    @cproperty
+    def party_pokemon_stat_sums(self) -> List[int]:
+        """
+        List of stat sums of the party
+        """
+        party_stat_sums = []
+        for i in range(self.party_count):
+            level = self._read(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 33)
+            hp = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 34)
+            attack = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 36)
+            defense = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 38)
+            speed = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 40)
+            special = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 42)
+            party_stat_sums.append(
+                PokemonBaseStats(hp=hp, attack=attack, defense=defense, speed=speed, special=special).rescale_as(
+                    original_level=level, target_level=stats_level_scale
+                ).sum()
+            )
+        return party_stat_sums
+
+    @cproperty
+    def worst_party_pokemon_index(self) -> int:
+        """
+        Index of the pokemon with the lowest stat sum in the party
+        """
+        return np.argmin(self.party_pokemon_stat_sums)
+
+    @cproperty
+    def has_better_pokemon_in_box(self) -> bool:
+        """
+        We use the additional memory so that we do not compute every stats every step.
+        """
+        return self._additional_memory.good_pokemon_in_box.better_pokemon_in_box
+
+    @cproperty
+    def visited_pokemon_centers(self) -> List[int]:
+        """
+        Pokemon centers that have been visited
+        """
+        return self._additional_memory.pokecenter_checkpoints.registered_checkpoints
+
+    @cproperty
+    def last_visited_maps(self) -> List[Map]:
+        """
+        Latest maps that have been visited
+        """
+        return self._additional_memory.map_history.map_history
+
+    @cproperty
+    def last_triggered_flags(self) -> List[ProgressionFlag]:
+        """
+        The latest triggered flag events.
+        """
+        return self._additional_memory.flag_history.flag_history
+
+    @cproperty
+    def last_triggered_flags_age(self) -> List[int]:
+        """
+        The latest triggered flag events.
+        """
+        return [self.step - step for step in self._additional_memory.flag_history.stepstamps]
 
 
 def pokemon_status(status_byte):

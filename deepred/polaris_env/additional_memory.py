@@ -84,6 +84,7 @@ class FlagHistory(AdditionalMemoryBlock):
         """
         They block some maps.
         """
+        self.flag_history_length = flag_history_length
         self.flag_history = [0] * flag_history_length
         self.stepstamps = [0] * flag_history_length
 
@@ -117,6 +118,7 @@ class MapHistory(AdditionalMemoryBlock):
 
         :param map_history_length: Length of the history
         """
+        self.map_history_length = map_history_length
         self.map_history = [Map.UNUSED_MAP_69] * map_history_length
 
     def update(
@@ -141,16 +143,21 @@ class GoodPokemonInBoxCache(AdditionalMemoryBlock):
 
         :param map_history_length: Length of the history
         """
-        self.better_pokemon_in_box = True
+        self.better_pokemon_in_box = False
         self._prev_box_count = 0
 
     def update(
             self,
             gamestate: GameState
     ):
-        if gamestate.box_pokemon_count > self._prev_box_count:
-            # detect if we have a better pokemon in box.
-            pass
+        if gamestate.box_pokemon_count == self._prev_box_count:
+            return
+
+        party_stat_sums = gamestate.party_pokemon_stat_sums
+        worst_party_pokemon_index = gamestate.worst_party_pokemon_index
+        box_stat_sums = gamestate.box_pokemon_stat_sums
+        best_box_pokemon_index = gamestate.best_box_pokemon_index
+        self.better_pokemon_in_box = party_stat_sums[worst_party_pokemon_index] < box_stat_sums[best_box_pokemon_index]
 
 
 class AdditionalMemory(AdditionalMemoryBlock):

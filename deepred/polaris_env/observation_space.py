@@ -10,7 +10,9 @@ import tree
 from PIL import Image
 from gymnasium import spaces
 from gymnasium.spaces import Box
-from deepred.polaris_env.pokemon_red.enums import Map, BagItem, ProgressionEvents
+from tensorflow.python.keras.backend import dtype
+
+from deepred.polaris_env.pokemon_red.enums import Map, BagItem, ProgressionEvents, Pokemon, PokemonType, Move
 from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
@@ -36,7 +38,7 @@ class Observation(abc.ABC):
         """
         pass
 
-    def initialise(
+    def set_offset(
             self,
             offset: int = 0,
     ):
@@ -68,9 +70,10 @@ class RamObservation(Observation):
             self,
             extractor: Callable[[GameState], Any],
             nature: ObsType,
-            size: int = 1,
+            size: int | Tuple[int, int] = 1,
             scale: float = 1,
             domain: Tuple = (-1e8, 1e8),
+            preprocess=True,
     ):
         """
         :param extractor: Function to call on a gamestate to grab the observation of interest.
@@ -80,22 +83,37 @@ class RamObservation(Observation):
         :param scale: scale for continuous observations. The observed value will be (x * scale).
         :param domain: domain for continuous observations. The observation will be clipped into this domain before being
             scaled.
+        :param preprocess: we might need to not preprocess categorical inputs, if False, leaves the categorical value as
+        is and stores the highest value possible in the box space's 'high' attribute. The size is used if multiple
+        similar values should be observed.
         """
 
         super().__init__(extractor)
         self.nature = nature
-        self.size = size
+        self.size = (size,) if isinstance(size, int) else size
         self.scale = scale
         low, high = domain
         self.domain = (low * scale, high * scale)
+        self.preprocess = preprocess
 
     def gym_spec(self) -> spaces.Box:
+        if self.nature == ObsType.CATEGORICAL:
+            if self.preprocess:
+                return spaces.Box(0, 1, self.size, dtype=np.uint8)
+            else:
+                # automatically infer best datatype:
+                high = int(self.domain[1])
+                if high < 256:
+                    dtype = np.uint8
+                else:
+                    dtype = np.uint16
+                return spaces.Box(0, high, self.size, dtype=dtype)
 
-        if self.nature in (ObsType.BINARY, ObsType.CATEGORICAL):
+        elif self.nature == ObsType.BINARY:
             # For now, we onehot categoricals from here, but we could one hot on the model side with tensorflow.
-            return spaces.Box(0, 1, (self.size,))
+            return spaces.Box(0, 1, self.size, dtype=np.uint8)
         elif self.nature == ObsType.CONTINUOUS:
-            return spaces.Box(*self.domain, (self.size,))
+            return spaces.Box(*self.domain, self.size, dtype=np.float32)
         else:
             raise NotImplementedError(f"Observation type {self.nature} is not supported.")
 
@@ -108,8 +126,11 @@ class RamObservation(Observation):
         if self.nature == ObsType.BINARY:
             input_array[self._offset: self._offset + self.size] = observed
         elif self.nature == ObsType.CATEGORICAL:
-                input_array[self._offset : self._offset + self.size] = 0
+            if self.preprocess:
+                input_array[self._offset: self._offset + self.size] = 0
                 input_array[self._offset + observed] = 1
+            else:
+                input_array[self._offset: self._offset + self.size] = observed
         elif self.nature == ObsType.CONTINUOUS:
                 input_array[self._offset: self._offset + self.size] = np.clip(observed, *self.domain) * self.scale
         else:
@@ -120,9 +141,9 @@ class PixelsObservation(Observation):
     def __init__(
             self,
             extractor: Callable[[GameState], Any],
-            framestack: int,
-            stack_oldest_only: int,
-            downscaled_shape: Tuple
+            downscaled_shape: Tuple,
+            framestack: int = 1,
+            stack_oldest_only: bool = False,
     ):
 
         super().__init__(extractor)
@@ -172,7 +193,8 @@ class PixelsObservation(Observation):
             input_array[h:] = self._pixel_history[-h:]
 
         else:
-            input_array[h:] = input_array[:-h]
+            if self.framestack > 1:
+                input_array[h:] = input_array[:-h]
             input_array[:h] = downscaled
 
 
@@ -185,6 +207,7 @@ class PolarisRedObservationSpace:
             stack_oldest_only: bool,
             observed_ram: Tuple[str],
             observed_items: Tuple[BagItem],
+            dummy_gamestate: GameState,
     ):
         """
         Manages the observation interface between the game and agent.
@@ -205,7 +228,23 @@ class PolarisRedObservationSpace:
             y = gamestate.pos_y
             return x / map_w, y / map_h
 
+
+        #         obs.extend(self.get_battle_status_obs())
+        #         pokemon_count = self.read_num_poke()
+        #         obs.extend([self.scaled_encoding(pokemon_count, 6)])  # number of pokemon
+        #         obs.extend([1 if pokemon_count == 6 else 0])  # party full
+        #         obs.extend([self.scaled_encoding(self.read_m(0xD31D), 20)])  # bag num items
+        #         obs.extend(self.get_bag_full_obs())  # bag full
+        #         obs.extend(self.get_last_coords_obs())  # last coords x, y
+        #         obs.extend([self.get_num_turn_in_battle_obs()])  # num turn in battle
+        #         obs.extend(self.get_stage_obs())  # stage manager
+        #         obs.extend(self.get_level_manager_obs())  # level manager
+        #         obs.extend(self.get_is_box_mon_higher_level_obs())  # is box mon higher level
+        #         # obs.extend(self.get_reward_check_obs())  # reward check
+
+        # TODO: allow auto inference of dimensions, rather than passing len of ...
         base_ram_observations = dict(
+            # TODO: align with baseline
             badges=RamObservation(
                 extractor=lambda gamestate: gamestate.badges,
                 nature=ObsType.BINARY,
@@ -214,67 +253,34 @@ class PolarisRedObservationSpace:
             money=RamObservation(
                 extractor=lambda gamestate: gamestate.player_money,
                 nature=ObsType.CONTINUOUS,
-                scale=1e-4,
-                domain=(0., 20_000.)
+                scale=2e-4,
+                domain=(0., 30_000.)
             ),
-            species_seen=RamObservation(
-                extractor=lambda gamestate: gamestate.species_seen_count,
-                nature=ObsType.CONTINUOUS,
-                scale=1e-2,
-                domain=(0., 151.)
+            current_checkpoint=RamObservation(
+                extractor=lambda gamestate: gamestate.current_checkpoint,
+                nature=ObsType.CATEGORICAL,
+                size=len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids),
             ),
-            species_caught=RamObservation(
-                extractor=lambda gamestate: gamestate.species_caught_count,
-                nature=ObsType.CONTINUOUS,
-                scale=4e-2,
-                domain=(0., 151.)
+            visited_pokecenters=RamObservation(
+                extractor=lambda gamestate: gamestate.visited_pokemon_centers,
+                nature=ObsType.BINARY,
+                size=len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids),
             ),
-            party_hp=RamObservation(
-                extractor=lambda gamestate: gamestate.party_hp,
-                nature=ObsType.CONTINUOUS,
-                size=6,
-                domain=(0., 1.)
+            field_moves=RamObservation(
+                extractor=lambda gamestate: gamestate.field_moves,
+                nature=ObsType.BINARY,
+                size=len(dummy_gamestate.field_moves),
             ),
-            party_level=RamObservation(
-                extractor=lambda gamestate: gamestate.party_level,
-                nature=ObsType.CONTINUOUS,
-                size=6,
-                scale=1/50,
-                domain=(0., 100.)
+            have_hms=RamObservation(
+                extractor=lambda gamestate: gamestate.hms,
+                nature=ObsType.BINARY,
+                size=len(dummy_gamestate.hms),
             ),
             in_battle=RamObservation(
                 extractor=lambda gamestate: gamestate.is_in_battle,
                 nature=ObsType.BINARY,
             ),
-            sent_out=RamObservation(
-                extractor=lambda gamestate: gamestate.sent_out,
-                nature=ObsType.CATEGORICAL,
-                size=6,
-            ),
-            bag_items=RamObservation(
-                extractor=extract_bag_items,
-                nature=ObsType.CONTINUOUS,
-                size=len(observed_items),
-                scale=1/4,
-                domain=(0., 8.)
-            ),
-            event_flags=RamObservation(
-                extractor=lambda gamestate: gamestate.event_flags,
-                nature=ObsType.BINARY,
-                size=len(ProgressionEvents),
-            ),
-            position=RamObservation(
-                extractor=scaled_position,
-                nature=ObsType.CONTINUOUS,
-                size=2,
-                domain=(0., 1.)
 
-            ),
-            map_id=RamObservation(
-                extractor=lambda gamestate: gamestate.map,
-                nature=ObsType.CATEGORICAL,
-                size=len(Map)
-            ),
             battle_type=RamObservation(
                 extractor=lambda gamestate: gamestate.battle_type,
                 nature=ObsType.CATEGORICAL,
@@ -287,56 +293,152 @@ class PolarisRedObservationSpace:
                 domain=(1/6, 1.)
             ),
             party_full = RamObservation(
-                extractor=lambda gamestate: gamestate.party_count == 6,
+                extractor=lambda gamestate: int(gamestate.party_count == 6),
                 nature=ObsType.BINARY,
             ),
             better_pokemon_in_box = RamObservation(
                 extractor=lambda gamestate: gamestate.better_pokemon_in_box,
                 nature=ObsType.BINARY,
+            ),
+            bag_full = RamObservation(
+                extractor=lambda gamestate: int(gamestate.bag_full),
+                nature=ObsType.BINARY
             )
             # Optional addons
             # battle turns
         )
 
         offset = 0
-        for name, observation in list(ram_observations.items()):
-            if name not in observed_ram:
-                del ram_observations[name]
-            else:
-                observation.initialise(offset)
-                offset += observation.gym_spec().shape[0]
+        for name, observation in list(base_ram_observations.items()):
+            observation.set_offset(offset)
+            offset += observation.gym_spec().shape[0]
 
         pixel_observation = PixelsObservation(
                 extractor=lambda gamestate: gamestate.screen,
+                downscaled_shape=downscaled_screen_shape,
                 framestack=framestack,
                 stack_oldest_only=stack_oldest_only,
-                downscaled_shape=downscaled_screen_shape
         )
-        pixel_observation.initialise()
 
-        minimap_observation = PixelsObservation(
-            extractor=lambda gamestate: gamestate.minimap
+        feature_maps_observation = PixelsObservation(
+            extractor=lambda gamestate: gamestate.feature_maps,
+            downscaled_shape=dummy_gamestate.feature_maps.shape
         )
+
+        sprite_map_observation = PixelsObservation(
+            extractor=lambda gamestate: gamestate.sprite_map,
+            downscaled_shape=dummy_gamestate.sprite_map.shape
+        )
+
+        warp_map_observation = PixelsObservation(
+            extractor=lambda gamestate: gamestate.warp_map,
+            downscaled_shape=dummy_gamestate.warp_map.shape
+        )
+
+        last_visited_map_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.last_visited_maps,
+            nature=ObsType.CATEGORICAL,
+            size=dummy_gamestate._additional_memory.map_history.map_history_length,
+            domain=(0, len(Map)),
+            preprocess=False # we compute embeddings with the model
+        )
+
+        bag_item_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.ordered_bag_items,
+            nature=ObsType.CATEGORICAL,
+            size=20,
+            domain=(0, len(BagItem)),
+            preprocess=False # we compute embeddings with the model
+        )
+
+        bag_item_counts_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.ordered_bag_items,
+            nature=ObsType.CONTINUOUS,
+            size=20,
+            scale=1/10,
+            domain=(0., 10.),
+        )
+
+
+        # I think this is not needed, as the id provides no additional information when we are already observing stats, moves, etc.
+        pokemon_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.pokemons,
+            nature=ObsType.CATEGORICAL,
+            size=12,
+            domain=(0, len(Pokemon)),
+            preprocess=False
+        )
+
+        pokemon_type_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.pokemon_types,
+            nature=ObsType.CATEGORICAL,
+            size=12,
+            domain=(0, len(PokemonType)),
+            preprocess=False
+        )
+
+        pokemon_move_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.pokemon_moves,
+            nature=ObsType.CATEGORICAL,
+            size=12,
+            domain=(0, len(Move)),
+            preprocess=False
+        )
+
+        pokemon_pps_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.pokemon_pps,
+            nature=ObsType.CONTINUOUS,
+            size=(12, 4),
+            scale=1/30,
+            domain=(0., 30.),
+        )
+
+        pokemon_stats_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.pokemon_attributes,
+            nature=ObsType.CONTINUOUS,
+            size=(12, 15),
+            scale=1., # everything was prescaled
+            domain=(0., 1.),
+        )
+
+        recent_event_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.last_triggered_flags,
+            nature=ObsType.CATEGORICAL,
+            size=dummy_gamestate._additional_memory.flag_history.flag_history_length,
+            domain=(0, len(ProgressionEvents)),
+            preprocess=False
+        )
+
+        recent_event_ids_age_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.last_triggered_flags_age,
+            nature=ObsType.CONTINUOUS,
+            size=dummy_gamestate._additional_memory.flag_history.flag_history_length,
+            scale=1e-4,
+            domain=(0., 1.),
+        )
+
+        # recent pokemon centers, last checkpoint
 
         self.observations = dict(
-            ram=ram_observations,
+            ram=base_ram_observations,
             main_screen=pixel_observation,
-            minimap=minimap_observation,
-            minimap_sprite=minimap_sprite_observation,
-            minimap_warp=minimap_warp_observation,
-            map_ids=last_10_map_ids_observation,
-            map_step_since=last_10_map_step_since_observation,
-            item_ids=all_item_ids_observation,
-            item_quantity=items_quantity_observation,
-            pokemon_ids=all_pokemon_ids_observation,
-            pokemon_type_ids=all_pokemon_types_observation,
-            pokemon_move_ids=all_move_ids_observation,
-            pokemon_move_pps= all_move_pps_observation,
-            pokemon_all=all_pokemon_observaton,
-            event_ids=all_event_ids_observation,
-            event_step_since=all_event_step_since_observation,
+            feature_maps=feature_maps_observation,
+            sprite_map=sprite_map_observation,
+            warp_map=warp_map_observation,
+            map_ids=last_visited_map_ids_observation,
+            # map steps since ?
+            item_ids=bag_item_ids_observation,
+            item_quantities=bag_item_counts_observation,
+            #pokemon_ids=pokemon_ids_observation,
+            pokemon_type_ids=pokemon_type_ids_observation,
+            pokemon_move_ids=pokemon_move_ids_observation,
+            pokemon_move_pps= pokemon_pps_observation,
+            pokemon_stats=pokemon_stats_observation,
+            recent_event_ids=recent_event_ids_observation,
+            recent_event_ids_age=recent_event_ids_age_observation,
         )
 
+        # TODO: adapt and test for dtypes, and various types of observations
         self.inject = self._build_observation_op(self.observations)
 
         observation_gym_specs = tree.map_structure(
@@ -363,8 +465,8 @@ class PolarisRedObservationSpace:
         unflattened = {
             "pixels": flat_observation["pixels"],
             "ram": tree.unflatten_as(self.sample_unflattened_obs["ram"], list(flat_observation["ram"]))
-
         }
+
         return unflattened
 
     def _build_observation_op(

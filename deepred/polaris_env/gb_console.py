@@ -138,20 +138,11 @@ class GBConsole(PyBoy):
         :return: The next gamestate.
         """
 
-        # validate input first
-        if not self.validate_input(event):
-            self.invalid_count += 1
-            if self.invalid_count > 200:
-                self.handle_error("We are stuck somewhere with invalid inputs.")
-            return self._gamestate
-        self.invalid_count = 0
-
         # In order for actions to be stateless, we need to send it for 8 frames.
         self.send_input(event)
         self.tick(8, render=self.render and self.record_skipped_frames)
         if event != WindowEvent.PASS:
             self.send_input(RELEASE_EVENTS[event])
-
         # Skip frames until we are actionable.
         try:
             return self.skip_frames()
@@ -162,7 +153,6 @@ class GBConsole(PyBoy):
         super().tick(count, render)
         if self.record and render:
             self.add_video_frame()
-
         self._frame += count
 
         return GameState(self)
@@ -186,9 +176,9 @@ class GBConsole(PyBoy):
             gamestate = self.tick(skip_count, self.record_skipped_frames or self.render)
             total_frames_ticked += skip_count
             if (
-                    self._gamestate.map != gamestate.map
+                    self._gamestate.map != gamestate.map # map loading screen
                 or
-                    self._gamestate.is_in_battle and not gamestate.is_in_battle
+                    self._gamestate.is_in_battle and not gamestate.is_in_battle # battle transition screen
             ):
                 frames_to_skip += 33
 
@@ -245,13 +235,11 @@ class GBConsole(PyBoy):
             # We should not be able to open any other menu beside the shop menu if we disable the START menu
             # but ok .
             if self._gamestate.is_at_pokemart and self._gamestate.mart_items:
-                self.agent_helper.shopping(self._gamestate)
-                finalise = False
+                finalise = self.agent_helper.shopping(self._gamestate)
             elif self._gamestate.can_use_pc:
-                self.agent_helper.manage_party(self._gamestate)
-                finalise = False
+                finalise = self.agent_helper.manage_party(self._gamestate)
             else:
-                self.agent_helper.field_move()
+                finalise = self.agent_helper.field_move(self._gamestate, self.step_event)
 
         return finalise
 
@@ -282,8 +270,8 @@ class GBConsole(PyBoy):
                 self.step_event(WindowEvent.PRESS_BUTTON_A)
                 finalise = False
             elif battle_state == BattleState.REPLACE_MOVE:
-                is_learning_move = self.agent_helper.learn_move(self._gamestate)
-                if is_learning_move:
+                should_learn_move = self.agent_helper.should_learn_move(self._gamestate)
+                if should_learn_move:
                     self.step_event(WindowEvent.PRESS_BUTTON_A)
                 else:
                     self.step_event(WindowEvent.PRESS_BUTTON_B)
@@ -305,14 +293,13 @@ class GBConsole(PyBoy):
     def process_event(
             self,
             event: WindowEvent | CustomEvent
-    ):
+    ) -> GameState:
         # TODO: clean up
 
         if event == CustomEvent.ROLL_PARTY:
             self.agent_helper.roll_party(gamestate=self._gamestate)
             return
 
-        finalise = True
         if self._gamestate.is_in_battle:
             finalise = self.handle_battle_event(event)
         else:

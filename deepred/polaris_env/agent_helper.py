@@ -1,4 +1,4 @@
-from typing import Dict, List, Callable
+from typing import Dict, List, Callable, Tuple
 
 import numpy as np
 from pyboy.utils import WindowEvent
@@ -7,7 +7,7 @@ from deepred.polaris_env.game_patching import set_player_money, to_double
 from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.pokemon_red.bag_item_info import BagItemsInfo, BagItemInfo
 from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, Move, BagItem, Map, Pokemon, \
-    TileSet, Orientation
+    TileSet, Orientation, FieldMove, WaterTilesets
 from deepred.polaris_env.pokemon_red.move_info import MovesInfo
 from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats, PokemonBaseStats
 
@@ -103,7 +103,7 @@ class AgentHelper:
             gamestate._ram[RamLocation.MENU_ITEM_ID] = 0
 
 
-    def learn_move(
+    def should_learn_move(
             self,
             gamestate: GameState
     ) -> bool:
@@ -203,65 +203,59 @@ class AgentHelper:
     def manage_party(
             self,
             gamestate: GameState
-    ):
+    ) -> bool:
         """
-       Moves the lowest total stats pokemon in the party with the highest stats pokemon in the box.
+        Moves the lowest total stats pokemon in the party with the highest stats pokemon in the box.
 
-       The party should be full and there should be pokemons in the box if we call this function.
+        The party should be full and there should be pokemons in the box if we call this function.
         """
-        # We scale pokemons to the same level, this allows us to pick pokemons with better basestats and ivs.
-        scale_level = 50
 
         ram = gamestate._ram
         box_count = gamestate.box_pokemon_count
 
-        box_pokemons = extract_box_pokemon_stats(gamestate)
-        box_stat_sums = [box_pokemon.scale(level=scale_level).sum() for box_pokemon in box_pokemons]
-        best_box_pokemon = np.argmax(box_stat_sums)
+        party_stat_sums = gamestate.party_pokemon_stat_sums
+        worst_party_pokemon_index = gamestate.worst_party_pokemon_index
+        box_stat_sums = gamestate.box_pokemon_stat_sums
+        best_box_pokemon_index = gamestate.best_box_pokemon_index
 
-        party_stat_sums = []
-        for i in range(gamestate.party_count):
-            level = gamestate._read(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 33)
-            hp = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 34)
-            attack = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 36)
-            defense = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 38)
-            speed = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 40)
-            special = gamestate._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 42)
-            party_stat_sums.append(
-                PokemonBaseStats(hp=hp, attack=attack, defense=defense, speed=speed, special=special).rescale_as(
-                    original_level=level, target_level=scale_level
-                ).sum()
-            )
-        worst_party_pokemon = np.argmin(party_stat_sums)
-
-        if party_stat_sums[worst_party_pokemon] > box_stat_sums[best_box_pokemon]:
+        if party_stat_sums[worst_party_pokemon_index] > box_stat_sums[best_box_pokemon_index]:
             box_count = release_weak_pokemons(
                 gamestate._ram,
                 box_count,
                 box_stat_sums,
-                threshold=party_stat_sums[worst_party_pokemon]
+                threshold=party_stat_sums[worst_party_pokemon_index]
             )
         else:
             box_count = send_box_pokemon_to_party(
                 ram,
-                box_pokemons[best_box_pokemon],
-                best_box_pokemon,
-                worst_party_pokemon,
+                gamestate.box_pokemon_stats[best_box_pokemon_index],
+                best_box_pokemon_index,
+                worst_party_pokemon_index,
                 box_count
             )
 
         ram[RamLocation.BOX_POKEMON_COUNT] = box_count
 
+        return True
+
     def field_move(
             self,
             gamestate: GameState,
-            step_func: Callable[[WindowEvent], None],
-    ):
-        # This needs to interact with the emulator back and forth
-        # Pass the step function.
-        use_flute(gamestate, step_func)
-        use_cut(action, step_func)
-        use_surf(action, step_func)
+            step_function: Callable[[WindowEvent], GameState],
+    ) -> bool :
+        """
+        This needs to interact with the emulator back and forth
+        We pass the step function.
+        We return True if any field move was used.
+        No Flash/Strenght as we do not need them.
+        """
+        return (
+                try_use_flute(gamestate, step_function)
+                or
+                try_use_cut(gamestate, step_function)
+                or
+                try_use_surf(gamestate, step_function)
+        )
 
 
 def sell_useless_items(
@@ -331,52 +325,6 @@ def inject_bag_to_ram(
         ram[RamLocation.BAG_ITEMS_START + offset + 1] = 0
 
     ram[RamLocation.BAG_COUNT] = len(bag)
-
-
-def extract_box_pokemon_stats(
-        gamestate: GameState
-) -> List[PokemonStats]:
-
-    box_pokemons = []
-    for i in range(gamestate.box_pokemon_count):
-        offset = RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS
-        species = gamestate._read(offset)
-        level = gamestate._read(offset + 3)
-        exp = gamestate._read_triple(offset + 14)
-        hp_ev = gamestate._read_double(offset + 17)
-        atk_ev = gamestate._read_double(offset + 19)
-        def_ev = gamestate._read_double(offset + 21)
-        spd_ev = gamestate._read_double(offset + 23)
-        spc_ev = gamestate._read_double(offset + 25)
-        atk_def_iv = gamestate._read(offset + 27)
-        spd_spc_iv = gamestate._read(offset + 28)
-
-        atk_iv = atk_def_iv >> 4
-        def_iv = atk_def_iv & 0xF
-        spd_iv = spd_spc_iv >> 4
-        spc_iv = spd_spc_iv & 0xF
-
-        hp_iv = 0
-        hp_iv += 8 if atk_iv % 2 == 1 else 0
-        hp_iv += 4 if def_iv % 2 == 1 else 0
-        hp_iv += 2 if spd_iv % 2 == 1 else 0
-        hp_iv += 1 if spc_iv % 2 == 1 else 0
-
-        pokemon_stats = PokemonStats(
-            pokemon=Pokemon(species),
-            level=level,
-            exp=exp,
-            evs=PokemonBaseStats(
-                hp=hp_ev, attack=atk_ev, defense=def_ev, speed=spd_ev, special=spc_ev
-            ),
-            ivs=PokemonBaseStats(
-                hp=hp_iv, attack=atk_iv, defense=def_iv, speed=spd_iv, special=spc_iv
-
-            )
-        )
-        box_pokemons.append(pokemon_stats)
-
-    return box_pokemons
 
 
 def send_box_pokemon_to_party(
@@ -490,14 +438,100 @@ def delete_pokemon_box_at_index(
     return new_boxcount
 
 
-def use_flute(
+def try_use_surf(
         gamestate: GameState,
-        step_func: Callable[[WindowEvent], None]
-):
-    if not gamestate.can_use_flute or gamestate.tileset_id != TileSet.OVERWORLD:
-        return
+        step_function: Callable[[WindowEvent], GameState]
+) -> bool:
+    """
+    Attempts at using surf, we need to have the ability to surf, to be standing on the ground
+    and to be looking at the right tile.
+    """
+    if not (gamestate.can_use_surf and gamestate.tileset_id in WaterTilesets):
+        return False
 
-    sprite_map = gamestate.sprite_map
+    x, y = get_looking_at_coords(gamestate)
+    looking_at_tile = gamestate.feature_maps[1][x, y]
+    stand_on_tile =gamestate.feature_maps[1][gamestate.pos_x, gamestate.pos_y]
+
+    if (
+        gamestate.tileset_id == TileSet.TILESET_17
+        and
+        looking_at_tile == 0x14
+        and
+        stand_on_tile == 0x05
+    ):
+        return False
+    elif (
+        gamestate.tileset_id == TileSet.FOREST
+        and
+        looking_at_tile in [0x14, 0x48]
+        and stand_on_tile == 0x2E
+    ):
+        return False
+    elif (
+        gamestate.tileset_id in [TileSet.TILESET_13, TileSet.VERMILION_PORT]
+        and looking_at_tile != 0x14
+    ):
+        return False
+
+    # Prevent bot from using surf in some places ?
+
+    use_field_move(FieldMove.SURF, gamestate, step_function)
+
+    return True
+
+
+def try_use_cut(
+        gamestate: GameState,
+        step_function: Callable[[WindowEvent], GameState]
+) -> bool:
+    """
+    Attempts at using cut, we need to have the ability to cut, and to be looking at the right tile.
+    """
+
+    if not (gamestate.can_use_cut and gamestate.tileset_id in (TileSet.OVERWORLD, TileSet.GYM)):
+        return False
+
+    trees = gamestate.feature_maps[1]
+    x, y = get_looking_at_coords(gamestate)
+
+    if trees[x, y] != 1:
+        return False
+
+    use_field_move(FieldMove.CUT, gamestate, step_function)
+
+    return True
+
+
+def try_use_flute(
+        gamestate: GameState,
+        step_function: Callable[[WindowEvent], GameState]
+) -> bool :
+    """
+    Attempts at using the flute, we need to have the ability to use it, and to be looking at a snorlax.
+    """
+
+    if not (gamestate.can_use_flute and gamestate.tileset_id == TileSet.OVERWORLD):
+        return False
+
+    x, y = get_looking_at_coords(gamestate)
+    if gamestate.sprite_map[x, y] != 32: # Snorlax
+        return False
+
+    flute_bag_idx = gamestate.ordered_bag_items.index(BagItem.POKE_FLUTE)
+    ram = gamestate._ram
+    ram[RamLocation.BATTLE_SAVED_ITEM] = 2
+    ram[RamLocation.BAG_SAVED_ITEM] = 0
+    ram[RamLocation.SCROLL_OFFSET_VALUE] = flute_bag_idx
+
+    step_function(WindowEvent.PRESS_BUTTON_START)
+    for _ in range(10):
+        step_function(WindowEvent.PRESS_BUTTON_A)
+
+    return True
+
+
+def get_looking_at_coords(gamestate: GameState) -> Tuple[int, int]:
     x = 4
     y = 4
     if gamestate.player_orientation == Orientation.DOWN:
@@ -508,15 +542,20 @@ def use_flute(
         y -= 1
     elif gamestate.player_orientation == Orientation.RIGHT:
         y += 1
-    if sprite_map[x, y] != 32: # Snorlax
-        return
+    return x, y
 
-    flute_bag_idx = gamestate.ordered_bag_items.index(BagItem.POKE_FLUTE)
-    ram = gamestate._ram
-    ram[RamLocation.BATTLE_SAVED_ITEM] = 2
-    ram[RamLocation.BAG_SAVED_ITEM] = 0
-    ram[RamLocation.SCROLL_OFFSET_VALUE] = flute_bag_idx
 
-    step_func(WindowEvent.PRESS_BUTTON_START)
-    for _ in range(10):
-        step_func(WindowEvent.PRESS_BUTTON_A)
+def use_field_move(
+    field_move: FieldMove,
+    gamestate: GameState,
+    step_function: Callable[[WindowEvent], GameState]
+):
+    ram = gamestate._ram # ram is shared across gamestates.
+    ram[RamLocation.BATTLE_SAVED_ITEM] = 1  # 1 is pokemon
+    step_function(WindowEvent.PRESS_BUTTON_START)
+    step_function(WindowEvent.PRESS_BUTTON_A)
+    for _ in range(3):
+        ram[RamLocation.FIELD_MOVE] = field_move
+        ram[RamLocation.WHICH_POKEMON] = 0
+        ram[RamLocation.MAX_MENU_ITEM] = 3
+        step_function(WindowEvent.PRESS_BUTTON_A)
