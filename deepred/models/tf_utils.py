@@ -1,5 +1,5 @@
 from typing import Union, Iterable
-
+import sonnet as snt
 import tensorflow as tf
 
 
@@ -109,58 +109,37 @@ class AdaptiveMaxPooling2D(tf.keras.layers.Layer):
     def __init__(
         self,
         output_size: Union[int, Iterable[int]],
-        data_format="channels_last",
+        channels_last: bool = True,
         **kwargs,
     ):
-        self.data_format = normalize_data_format(data_format)
-        self.reduce_function = tf.reduce_max
+        self.channels_last = channels_last
         self.output_size = normalize_tuple(output_size, 2, "output_size")
         super().__init__(**kwargs)
 
     def call(self, inputs, *args):
-        h_bins = self.output_size[0]
-        w_bins = self.output_size[1]
-        if self.data_format == "channels_last":
-            split_cols = tf.split(inputs, h_bins, axis=1)
-            split_cols = tf.stack(split_cols, axis=1)
-            split_rows = tf.split(split_cols, w_bins, axis=3)
-            split_rows = tf.stack(split_rows, axis=3)
-            out_vect = self.reduce_function(split_rows, axis=[2, 4])
+        if self.channels_last:
+            shape = tf.shape(inputs)[-3:-1]
+            data_format = "channels_last" #"NHWC"
         else:
-            split_cols = tf.split(inputs, h_bins, axis=2)
-            split_cols = tf.stack(split_cols, axis=2)
-            split_rows = tf.split(split_cols, w_bins, axis=4)
-            split_rows = tf.stack(split_rows, axis=4)
-            out_vect = self.reduce_function(split_rows, axis=[3, 5])
-        return out_vect
+            shape = tf.shape(inputs)[-2:]
+            data_format = "channels_first" #"NCHW"
 
-    def compute_output_shape(self, input_shape):
-        input_shape = tf.TensorShape(input_shape).as_list()
-        if self.data_format == "channels_last":
-            shape = tf.TensorShape(
-                [
-                    input_shape[0],
-                    self.output_size[0],
-                    self.output_size[1],
-                    input_shape[3],
-                ]
-            )
-        else:
-            shape = tf.TensorShape(
-                [
-                    input_shape[0],
-                    input_shape[1],
-                    self.output_size[0],
-                    self.output_size[1],
-                ]
-            )
+        stride1 = (shape[0] // self.output_size[0])
+        stride2 = (shape[1] // self.output_size[1])
 
-        return shape
+        kernel_size1 = int(shape[0] - (self.output_size[0] - 1) * stride1)
+        kernel_size2 = int(shape[1] - (self.output_size[1] - 1) * stride2)
 
-    def get_config(self):
-        config = {
-            "output_size": self.output_size,
-            "data_format": self.data_format,
-        }
-        base_config = super().get_config()
-        return {**base_config, **config}
+        return tf.keras.layers.MaxPool2D(
+            pool_size=(kernel_size1, kernel_size2),
+            strides=(stride1, stride2),
+            padding="valid",
+            data_format=data_format
+        )(inputs)
+        # return tf.nn.max_pool2d(
+        #     inputs,
+        #     ksize=[kernel_size1, kernel_size2],
+        #     strides=(stride1, stride2),
+        #     padding='VALID',
+        #     data_format=data_format
+        # )

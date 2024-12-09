@@ -47,6 +47,8 @@ class PolarisRed(PolarisEnv):
             framestack: int = 3,
             stack_oldest_only: bool = False,
             reward_scales: dict  | None = None,
+            reward_laziness_check_freq: int = 2048,
+            reward_laziness_limit: int = 2048 * 4,
             savestate: Union[None, str] = None,
             map_history_length: int = 10,
             flag_history_length: int = 10,
@@ -55,7 +57,7 @@ class PolarisRed(PolarisEnv):
             render: bool = True,
             record: bool = False,
             speed_limit: int = 1,
-            record_skipped_frame: bool = False,
+            record_skipped_frame: bool= False,
             stream: bool = True,
             ** config
     ):
@@ -112,6 +114,9 @@ class PolarisRed(PolarisEnv):
 
         self.metrics : Union[PolarisRedMetrics, None] = None
         self.reward_scales = reward_scales
+        self.reward_laziness_check_freq = reward_laziness_check_freq
+        self.reward_laziness = 0
+        self.reward_laziness_limit = reward_laziness_limit
         self.reward_function: Union[PolarisRedRewardFunction, None] = None
         self.input_dict: Union[Dict, None] = None
 
@@ -130,6 +135,8 @@ class PolarisRed(PolarisEnv):
             count_based_exploration_scales=options[0]["count_based_exploration_scales"],
             inital_gamestate=gamestate,
         )
+        self.reward_laziness = 0
+
         self.input_dict = self.observation_space.sample()
         self.observation_interface.inject(
             gamestate,
@@ -161,8 +168,8 @@ class PolarisRed(PolarisEnv):
 
             with open(path / "save.state", "wb+") as f:
                 self.console.save_state(f)
-
             event = WindowEvent.PASS
+
         gamestate = self.console.process_event(event)
 
         self.observation_interface.inject(
@@ -171,9 +178,17 @@ class PolarisRed(PolarisEnv):
         )
         self.metrics.update(gamestate)
         reward = self.reward_function.compute_step_rewards(gamestate)
+        if reward == 0:
+            self.reward_laziness += 1
+        else:
+            self.reward_laziness = 0
 
         self.step_count += 1
-        done = self.step_count >= self.episode_length
+        # stop if reached step limit, or if we are stuck somewhere.
+        done = self.step_count >= self.episode_length or (
+                self.step_count % self.reward_laziness_check_freq == 0
+                and self.reward_laziness >= self.reward_laziness_limit)
+
         dones = {
             "__all__": done,
             0: done
@@ -183,7 +198,6 @@ class PolarisRed(PolarisEnv):
 
         if self.stream:
             self.streamer.send(self.console.get_gamestate())
-
 
         return {0: self.input_dict}, {0: reward}, dones, dones, self.empty_info_dict
 
