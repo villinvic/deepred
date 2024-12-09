@@ -6,11 +6,12 @@ from deepred.polaris_env.rewards import Goals
 from deepred.polaris_utils.counting import HashScales
 
 
+
 def run(
      game_path: str = "faster_red6.gbc",
      episode_length: int = 2048,
      human_inputs: bool = True,
-     downscaled_screen_shape: tuple = (72, 80),
+     downscaled_screen_shape: tuple = (36, 40),
      framestack: int = 3,
      stack_oldest_only: bool = False,
      map_history_length: int = 10,
@@ -18,7 +19,7 @@ def run(
      enabled_patches: Tuple[str] = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                                     "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
      reward_scales: dict = dict(seen_pokemons=0.1, experience=2, badges=5),
-     savestate: str | None = "save.state",
+     savestate: str | None = "faster_red_post_parcel_pokeballs.state",
      session_path: str = "red_tests",
      record: bool = False,
      speed_limit: int = 1,

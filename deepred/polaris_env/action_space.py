@@ -11,20 +11,26 @@ class CustomEvent(IntEnum):
 
 
 human_input_dict = {
+    # up arrow
     "[A": WindowEvent.PRESS_ARROW_UP,
+    # down arrow
     "[B": WindowEvent.PRESS_ARROW_DOWN,
+    # left arrow
     "[D": WindowEvent.PRESS_ARROW_LEFT,
+    # right arrow
     "[C": WindowEvent.PRESS_ARROW_RIGHT,
+    # enter
     "": WindowEvent.PRESS_BUTTON_A,
     "a": WindowEvent.PRESS_BUTTON_A,
-
     "0": WindowEvent.PRESS_BUTTON_B,
     "5": WindowEvent.PRESS_BUTTON_START,
     "p": WindowEvent.PASS,
-    "r": CustomEvent.ROLL_PARTY,
-    "d": CustomEvent.DUMP_FRAME,
-    "s": CustomEvent.SAVE_STATE,
 
+    "r": CustomEvent.ROLL_PARTY,
+    # dumps the agent data on the disk (in run_dir/human_dumps/)
+    "d": CustomEvent.DUMP_FRAME,
+    # saves the gamestate (in run_dir/human_dumps/)
+    "s": CustomEvent.SAVE_STATE,
 }
 
 

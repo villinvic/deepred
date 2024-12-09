@@ -192,6 +192,9 @@ class AgentHelper:
 
         The party should be full and there should be pokemons in the box if we call this function.
         """
+        if gamestate.box_pokemon_count == 0:
+            # If no pokemon in box, do nothing, this is needed here to not interact at all with the pc ingame.
+            return True
 
         ram = gamestate._ram
         box_count = gamestate.box_pokemon_count
@@ -331,39 +334,34 @@ def send_box_pokemon_to_party(
 
 
     ram[RamLocation.PARTY_0_ID + party_index] = ram[RamLocation.BOX_POKEMON_SPECIES_START + box_index]
+    # level
+    ram[RamLocation.PARTY_START + party_index * 44 + 33] = ram[RamLocation.BOX_POKEMON_START + box_index * 33 + 3]
 
     for offset in range(DataStructDimension.BOX_POKEMON_STATS):
        ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + offset] =\
            ram[RamLocation.BOX_POKEMON_START + box_index * DataStructDimension.BOX_POKEMON_STATS + offset]
-       if offset == 3:
-           ram[RamLocation.PARTY_START + party_index * 44 + 33] = ram[RamLocation.BOX_POKEMON_START + box_index * 33 + 3]
-
     scaled_stats = pokemon_stats.scale()
 
     b1, b2 = to_double(scaled_stats.hp)
-    print(b1, b2)
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35] = b1
     ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35] = b1
+
 
     b1, b2 = to_double(scaled_stats.attack)
-    print(b1, b2)
-
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 2] = b1
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 2] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 2] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 2] = b1
 
     b1, b2 = to_double(scaled_stats.defense)
-    print(b1, b2)
-
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 4] = b1
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 4] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 4] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 4] = b1
 
     b1, b2 = to_double(scaled_stats.speed)
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 6] = b1
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 6] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 6] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 6] = b1
 
     b1, b2 = to_double(scaled_stats.special)
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 8] = b1
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 8] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 8] = b2
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 8] = b1
 
     for offset in range(0, DataStructDimension.POKEMON_NICKNAME):
         ram[RamLocation.PARTY_NICKNAMES_START + party_index * DataStructDimension.POKEMON_NICKNAME + offset] = ram[

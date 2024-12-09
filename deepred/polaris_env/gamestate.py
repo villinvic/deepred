@@ -143,9 +143,6 @@ class GameState:
         """
         :return: True if we are currently at a dialog frame. Utility for skipping dialogs.
         """
-        if self.is_at_pokecenter:
-            print(self.textbox_id)
-            return self.textbox_id == 1
         return (
                 self.start_menu_item == StartMenuItem.UNSELECTED
                 and not self.is_in_battle
@@ -199,8 +196,6 @@ class GameState:
                 self.player_orientation == Orientation.UP
                 and
                 (self.pos_x, self.pos_y) in pc_locations.get(self.map, pokecenter_pc_location)
-                and
-                self.box_pokemon_count > 0
         )
 
     @cproperty
