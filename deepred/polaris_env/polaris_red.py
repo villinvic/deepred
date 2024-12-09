@@ -148,10 +148,20 @@ class PolarisRed(PolarisEnv):
 
         event = self.input_interface.get_event(action_dict[0])
         if event == CustomEvent.DUMP_FRAME:
+            path = self.session_path / Path("human_dump")
+            path.mkdir(exist_ok=True)
             self.observation_interface.dump_observations(
-                self.session_path / Path("human_dump"),
+                path / "observation",
                 self.input_dict,
             )
+            event = WindowEvent.PASS
+        elif event == CustomEvent.SAVE_STATE:
+            path = self.session_path / Path("human_dump")
+            path.mkdir(exist_ok=True)
+
+            with open(path / "save.state", "wb+") as f:
+                self.console.save_state(f)
+
             event = WindowEvent.PASS
         gamestate = self.console.process_event(event)
 

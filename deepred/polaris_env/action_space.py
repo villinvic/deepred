@@ -1,16 +1,13 @@
-import time
 from enum import IntEnum
 
 from pyboy.utils import WindowEvent
 from gymnasium.spaces import Discrete
 
-import sys
-import select
-
 
 class CustomEvent(IntEnum):
-    ROLL_PARTY = 0
-    DUMP_FRAME = 1
+    ROLL_PARTY = 77
+    DUMP_FRAME = 78
+    SAVE_STATE = 79
 
 
 human_input_dict = {
@@ -19,11 +16,15 @@ human_input_dict = {
     "[D": WindowEvent.PRESS_ARROW_LEFT,
     "[C": WindowEvent.PRESS_ARROW_RIGHT,
     "": WindowEvent.PRESS_BUTTON_A,
+    "a": WindowEvent.PRESS_BUTTON_A,
+
     "0": WindowEvent.PRESS_BUTTON_B,
     "5": WindowEvent.PRESS_BUTTON_START,
     "p": WindowEvent.PASS,
     "r": CustomEvent.ROLL_PARTY,
     "d": CustomEvent.DUMP_FRAME,
+    "s": CustomEvent.SAVE_STATE,
+
 }
 
 

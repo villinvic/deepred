@@ -1,15 +1,13 @@
-from typing import Dict, List, Callable, Tuple
+from typing import Dict, List, Callable
 
 import numpy as np
 from pyboy.utils import WindowEvent
 
 from deepred.polaris_env.game_patching import set_player_money, to_double
-from deepred.polaris_env.gamestate import GameState
+from deepred.polaris_env.gamestate import GameState, get_looking_at_coords
 from deepred.polaris_env.pokemon_red.bag_item_info import BagItemsInfo, BagItemInfo
-from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, Move, BagItem, Map, Pokemon, \
-    TileSet, Orientation, FieldMove, WaterTilesets
-from deepred.polaris_env.pokemon_red.move_info import MovesInfo
-from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats, PokemonBaseStats
+from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, BagItem, TileSet, FieldMove
+from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats
 
 
 class AgentHelper:
@@ -47,23 +45,19 @@ class AgentHelper:
 
         ram = gamestate._ram
 
-        stats_addresses = slice(
-            RamLocation.PARTY_START,
-            RamLocation.PARTY_START + DataStructDimension.POKEMON_STATS,
-            1
-        )
-
-        nickname_addresses = slice(
-            RamLocation.PARTY_NICKNAMES_START,
-            RamLocation.PARTY_NICKNAMES_START + DataStructDimension.POKEMON_NICKNAME,
-            1
-        )
-
         # the pokemon at slot 0 will wrap around.
         slot_0 = {
             "species": ram[RamLocation.PARTY_0_ID],
-            "stats": ram[stats_addresses],
-            "nickname": ram[nickname_addresses]
+            "stats": ram[slice(
+            RamLocation.PARTY_START,
+            RamLocation.PARTY_START + DataStructDimension.POKEMON_STATS,
+            1
+        )],
+            "nickname": ram[slice(
+            RamLocation.PARTY_NICKNAMES_START,
+            RamLocation.PARTY_NICKNAMES_START + DataStructDimension.POKEMON_NICKNAME,
+            1
+        )]
         }
 
         for slot in range(gamestate.party_count - 1):
@@ -72,25 +66,20 @@ class AgentHelper:
             ram[RamLocation.PARTY_0_ID + slot] = ram[RamLocation.PARTY_0_ID + (slot + 1)]
             ram[RamLocation.PARTY_0_ID + slot] = ram[RamLocation.PARTY_0_ID + (slot + 1)]
 
-            next_stats_addresses = slice(
-                RamLocation.PARTY_START + (slot + 1) * DataStructDimension.POKEMON_STATS,
-                RamLocation.PARTY_START + (slot + 2) * DataStructDimension.POKEMON_STATS,
-                1
-            )
-            ram[stats_addresses] = next_stats_addresses
-            stats_addresses = next_stats_addresses
+            for addr in range(RamLocation.PARTY_START + slot * DataStructDimension.POKEMON_STATS, RamLocation.PARTY_START + (slot + 1) * DataStructDimension.POKEMON_STATS):
+                ram[addr] = ram[addr + DataStructDimension.POKEMON_STATS]
 
-            next_nickname_addresses = slice(
-                RamLocation.PARTY_NICKNAMES_START + (slot + 1) * DataStructDimension.POKEMON_NICKNAME,
-                RamLocation.PARTY_NICKNAMES_START + (slot + 2) * DataStructDimension.POKEMON_NICKNAME,
-                1
-            )
-            ram[nickname_addresses] = next_nickname_addresses
-            nickname_addresses = next_nickname_addresses
+            for addr in range(RamLocation.PARTY_NICKNAMES_START + slot * DataStructDimension.POKEMON_NICKNAME, RamLocation.PARTY_NICKNAMES_START + (slot + 1) * DataStructDimension.POKEMON_NICKNAME):
+                ram[addr] = ram[addr + DataStructDimension.POKEMON_NICKNAME]
 
         ram[RamLocation.PARTY_0_ID + (gamestate.party_count - 1)] = slot_0["species"]
-        ram[stats_addresses] = slot_0["stats"]
-        ram[nickname_addresses] = slot_0["nickname"]
+        for i, addr in enumerate(range(RamLocation.PARTY_START + (gamestate.party_count - 1) * DataStructDimension.POKEMON_STATS,
+                          RamLocation.PARTY_START + gamestate.party_count * DataStructDimension.POKEMON_STATS)):
+            ram[addr] = slot_0["stats"][i]
+        for i, addr in enumerate(range(RamLocation.PARTY_NICKNAMES_START + (gamestate.party_count - 1) * DataStructDimension.POKEMON_NICKNAME,
+                          RamLocation.PARTY_NICKNAMES_START + gamestate.party_count * DataStructDimension.POKEMON_NICKNAME)):
+            ram[addr] =  slot_0["nickname"][i]
+
 
     def switch(
             self,
@@ -129,7 +118,7 @@ class AgentHelper:
         Returns if we bought successfully or not.
         """
 
-        MAX_BAG_TYPES = 20
+        MAX_BAG_TYPES = 20 - 1 # keep a free slot on top
         MAX_ITEM_COUNT = 10
         current_bag = gamestate.bag_items
         money = gamestate.player_money
@@ -145,8 +134,16 @@ class AgentHelper:
             gamestate.mart_items,
             key=lambda i: -BagItemsInfo[i].priority,
         )
+
         for item in ranked_mart_items:
             item_info = BagItemsInfo[item]
+
+            if bag_full() and money >= item_info.price:
+                money = sell_items_to_free_space(
+                    current_bag,
+                    money
+                )
+
             while (
                     money >= item_info.price
                     and
@@ -161,12 +158,6 @@ class AgentHelper:
                     item_info
                 )
 
-                # If our bag is full and we still have enough money:
-                if bag_full() and money >= item_info.price:
-                    sell_items_to_free_space(
-                        current_bag,
-                        money
-                    )
 
         ram = gamestate._ram
         inject_bag_to_ram(
@@ -233,7 +224,7 @@ class AgentHelper:
     def field_move(
             self,
             gamestate: GameState,
-            step_function: Callable[[WindowEvent], GameState],
+            step_function: Callable[[Callable, int, WindowEvent], None],
     ) -> bool :
         """
         This needs to interact with the emulator back and forth
@@ -298,6 +289,13 @@ def buy_item(
     current_money -= item_info.price
     return current_money
 
+def bag_value(
+        current_bag: Dict[BagItem, int]
+) -> int:
+    return sum([
+        BagItemInfo(item).price * quantity for item, quantity in current_bag.items()
+    ])
+
 def inject_bag_to_ram(
         ram,
         bag: Dict[BagItem, int]
@@ -331,25 +329,31 @@ def send_box_pokemon_to_party(
     Returns new amount of pokemon in the box.
     """
 
+
     ram[RamLocation.PARTY_0_ID + party_index] = ram[RamLocation.BOX_POKEMON_SPECIES_START + box_index]
 
-    ram[slice(RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS,
-    RamLocation.PARTY_START + (party_index + 1) * DataStructDimension.POKEMON_STATS, 1)] = ram[slice(
-        RamLocation.BOX_POKEMON_START + box_index * DataStructDimension.BOX_POKEMON_STATS,
-        RamLocation.BOX_POKEMON_START + (box_index + 1) * DataStructDimension.BOX_POKEMON_STATS, 1)
-    ]
+    for offset in range(DataStructDimension.BOX_POKEMON_STATS):
+       ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + offset] =\
+           ram[RamLocation.BOX_POKEMON_START + box_index * DataStructDimension.BOX_POKEMON_STATS + offset]
+       if offset == 3:
+           ram[RamLocation.PARTY_START + party_index * 44 + 33] = ram[RamLocation.BOX_POKEMON_START + box_index * 33 + 3]
 
     scaled_stats = pokemon_stats.scale()
 
     b1, b2 = to_double(scaled_stats.hp)
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34] = b1
-    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35] = b2
+    print(b1, b2)
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35] = b1
+    ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34] = b2
 
     b1, b2 = to_double(scaled_stats.attack)
+    print(b1, b2)
+
     ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 2] = b1
     ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 2] = b2
 
     b1, b2 = to_double(scaled_stats.defense)
+    print(b1, b2)
+
     ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 4] = b1
     ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 4] = b2
 
@@ -361,12 +365,10 @@ def send_box_pokemon_to_party(
     ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 34 + 8] = b1
     ram[RamLocation.PARTY_START + party_index * DataStructDimension.POKEMON_STATS + 35 + 8] = b2
 
-    ram[slice(RamLocation.PARTY_NICKNAMES_START + party_index * DataStructDimension.POKEMON_NICKNAME,
-              RamLocation.PARTY_NICKNAMES_START + (party_index + 1) * DataStructDimension.POKEMON_NICKNAME,
-              1
-              )] = ram[slice(
-        RamLocation.BOX_NICKNAMES_START + box_index * DataStructDimension.POKEMON_NICKNAME,
-        RamLocation.BOX_NICKNAMES_START + (box_index + 1) * DataStructDimension.POKEMON_NICKNAME, 1)]
+    for offset in range(0, DataStructDimension.POKEMON_NICKNAME):
+        ram[RamLocation.PARTY_NICKNAMES_START + party_index * DataStructDimension.POKEMON_NICKNAME + offset] = ram[
+            RamLocation.BOX_NICKNAMES_START + box_index * DataStructDimension.POKEMON_NICKNAME + offset
+        ]
 
     return delete_pokemon_box_at_index(
         ram,
@@ -402,48 +404,49 @@ def delete_pokemon_box_at_index(
     """
     Removes the pokemon at give index by shifting the pokemon indexed below up one spot.
     """
+
     for i in range(index, box_count - 1):
         ram[RamLocation.BOX_POKEMON_SPECIES_START + i] = ram[RamLocation.BOX_POKEMON_SPECIES_START + i + 1]
 
-        ram[slice(RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS,
-                  RamLocation.BOX_POKEMON_START + (i + 1) * DataStructDimension.BOX_POKEMON_STATS, 1)] = ram[slice(
-            RamLocation.BOX_POKEMON_START + (i + 1) * DataStructDimension.BOX_POKEMON_STATS,
-            RamLocation.BOX_POKEMON_START + (i + 2) * DataStructDimension.BOX_POKEMON_STATS, 1
-        )]
+        for addr in range(RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS,
+                          RamLocation.BOX_POKEMON_START + (i + 1) * DataStructDimension.BOX_POKEMON_STATS):
+            ram[addr] = ram[addr + DataStructDimension.BOX_POKEMON_STATS]
 
-        ram[slice(RamLocation.BOX_NICKNAMES_START + i * DataStructDimension.POKEMON_NICKNAME,
-                  RamLocation.BOX_NICKNAMES_START + (i + 1) * DataStructDimension.POKEMON_NICKNAME, 1)] = ram[slice(
-            RamLocation.BOX_NICKNAMES_START + (i + 1) * DataStructDimension.POKEMON_NICKNAME,
-            RamLocation.BOX_NICKNAMES_START + (i + 2) * DataStructDimension.POKEMON_NICKNAME, 1
-        )]
+        for addr in range(RamLocation.BOX_NICKNAMES_START + i * DataStructDimension.POKEMON_NICKNAME,
+                          RamLocation.BOX_NICKNAMES_START + (i + 1) * DataStructDimension.POKEMON_NICKNAME):
+            ram[addr] = ram[addr + DataStructDimension.POKEMON_NICKNAME]
 
     new_boxcount = box_count - 1
 
     ram[RamLocation.BOX_POKEMON_SPECIES_START + new_boxcount] = 0xFF
 
-    ram[slice(RamLocation.BOX_POKEMON_START + new_boxcount * DataStructDimension.BOX_POKEMON_STATS,
-              RamLocation.BOX_POKEMON_START + (new_boxcount + 1) * DataStructDimension.BOX_POKEMON_STATS, 1)] = 0
+    for addr in range(RamLocation.BOX_POKEMON_START + new_boxcount * DataStructDimension.BOX_POKEMON_STATS,
+                      RamLocation.BOX_POKEMON_START + (new_boxcount + 1) * DataStructDimension.BOX_POKEMON_STATS):
+        ram[addr] = 0
 
-    ram[slice(RamLocation.BOX_NICKNAMES_START + new_boxcount * DataStructDimension.POKEMON_NICKNAME,
-              RamLocation.BOX_NICKNAMES_START + (new_boxcount + 1) * DataStructDimension.POKEMON_NICKNAME, 1)] = 0
+    for addr in range(RamLocation.BOX_NICKNAMES_START + new_boxcount * DataStructDimension.POKEMON_NICKNAME,
+                      RamLocation.BOX_NICKNAMES_START + (new_boxcount + 1) * DataStructDimension.POKEMON_NICKNAME):
+        ram[addr] = 0
 
     return new_boxcount
 
 
 def try_use_surf(
         gamestate: GameState,
-        step_function: Callable[[WindowEvent], GameState]
+        step_function: Callable[[Callable, int, WindowEvent], None]
 ) -> bool:
     """
     Attempts at using surf, we need to have the ability to surf, to be standing on the ground
     and to be looking at the right tile.
     """
-    if not (gamestate.can_use_surf and gamestate.tileset_id in WaterTilesets):
+    #if not (gamestate.can_use_surf and gamestate.tileset_id in WaterTilesets):
+    #    return False
+    if gamestate.walk_bike_surf_state == 2:
         return False
 
     x, y = get_looking_at_coords(gamestate)
-    looking_at_tile = gamestate.feature_maps[1][x, y]
-    stand_on_tile =gamestate.feature_maps[1][gamestate.pos_x, gamestate.pos_y]
+    looking_at_tile = gamestate.bottom_left_screen_tiles[y, x]
+    stand_on_tile = gamestate.bottom_left_screen_tiles[4, 4]
 
     if (
         gamestate.tileset_id == TileSet.TILESET_17
@@ -465,6 +468,8 @@ def try_use_surf(
         and looking_at_tile != 0x14
     ):
         return False
+    elif looking_at_tile != 0x14:
+        return False
 
     # Prevent bot from using surf in some places ?
 
@@ -475,19 +480,19 @@ def try_use_surf(
 
 def try_use_cut(
         gamestate: GameState,
-        step_function: Callable[[WindowEvent], GameState]
+        step_function: Callable[[Callable, int, WindowEvent], None]
 ) -> bool:
     """
     Attempts at using cut, we need to have the ability to cut, and to be looking at the right tile.
     """
 
     if not (gamestate.can_use_cut and gamestate.tileset_id in (TileSet.OVERWORLD, TileSet.GYM)):
-        return False
+       return False
 
     trees = gamestate.feature_maps[1]
     x, y = get_looking_at_coords(gamestate)
 
-    if trees[x, y] != 1:
+    if trees[y, x] != 255:
         return False
 
     use_field_move(FieldMove.CUT, gamestate, step_function)
@@ -497,7 +502,7 @@ def try_use_cut(
 
 def try_use_flute(
         gamestate: GameState,
-        step_function: Callable[[WindowEvent], GameState]
+        step_function: Callable[[Callable, int, WindowEvent], None]
 ) -> bool :
     """
     Attempts at using the flute, we need to have the ability to use it, and to be looking at a snorlax.
@@ -507,47 +512,40 @@ def try_use_flute(
         return False
 
     x, y = get_looking_at_coords(gamestate)
-    if gamestate.sprite_map[x, y] != 32: # Snorlax
+    if gamestate.sprite_map[y, x] != 32: # Snorlax
         return False
 
     flute_bag_idx = gamestate.ordered_bag_items.index(BagItem.POKE_FLUTE)
-    ram = gamestate._ram
-    ram[RamLocation.BATTLE_SAVED_ITEM] = 2
-    ram[RamLocation.BAG_SAVED_ITEM] = 0
-    ram[RamLocation.SCROLL_OFFSET_VALUE] = flute_bag_idx
+    def ram_modifier(_ram):
+        _ram[RamLocation.BATTLE_SAVED_ITEM] = 2
+        _ram[RamLocation.BAG_SAVED_ITEM] = 0
+        _ram[RamLocation.SCROLL_OFFSET_VALUE] = flute_bag_idx
 
-    step_function(WindowEvent.PRESS_BUTTON_START)
+    step_function(ram_modifier, 18, WindowEvent.PRESS_BUTTON_START)
     for _ in range(10):
-        step_function(WindowEvent.PRESS_BUTTON_A)
+        step_function(ram_modifier, 18, WindowEvent.PRESS_BUTTON_A)
 
     return True
-
-
-def get_looking_at_coords(gamestate: GameState) -> Tuple[int, int]:
-    x = 4
-    y = 4
-    if gamestate.player_orientation == Orientation.DOWN:
-        x += 1
-    elif gamestate.player_orientation == Orientation.UP:
-        x -= 1
-    elif gamestate.player_orientation == Orientation.LEFT:
-        y -= 1
-    elif gamestate.player_orientation == Orientation.RIGHT:
-        y += 1
-    return x, y
 
 
 def use_field_move(
     field_move: FieldMove,
     gamestate: GameState,
-    step_function: Callable[[WindowEvent], GameState]
+    step_function: Callable[[Callable, int, WindowEvent], None]
 ):
     ram = gamestate._ram # ram is shared across gamestates.
+
     ram[RamLocation.BATTLE_SAVED_ITEM] = 1  # 1 is pokemon
-    step_function(WindowEvent.PRESS_BUTTON_START)
-    step_function(WindowEvent.PRESS_BUTTON_A)
+    def ram_modifier(_ram):
+        _ram[RamLocation.FIELD_MOVE] = field_move
+        _ram[RamLocation.WHICH_POKEMON] = 0
+        _ram[RamLocation.MAX_MENU_ITEM] = 3
+
+    step_function(ram_modifier, 16, WindowEvent.PRESS_BUTTON_START)
+    step_function(ram_modifier, 16, WindowEvent.PRESS_BUTTON_A)
+
     for _ in range(3):
-        ram[RamLocation.FIELD_MOVE] = field_move
-        ram[RamLocation.WHICH_POKEMON] = 0
-        ram[RamLocation.MAX_MENU_ITEM] = 3
-        step_function(WindowEvent.PRESS_BUTTON_A)
+        step_function(ram_modifier, 16, WindowEvent.PRESS_BUTTON_A)
+    step_function(ram_modifier, 24*3, WindowEvent.PASS)
+
+

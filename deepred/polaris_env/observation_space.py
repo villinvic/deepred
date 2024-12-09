@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable, Any, Tuple, Union, List, Dict
 
 import cv2
+import gymnasium.spaces
 import numpy as np
 import tree
 from PIL import Image
@@ -535,47 +536,50 @@ class PolarisRedObservationSpace:
     def dump_observations(
             self,
             dump_path: Path,
-            observations: Dict
+            observations: Dict,
+            observation_space: gymnasium.spaces.Space | None = None,
     ):
         """
         Dumps the observation to the designated path. Pixel observations are output as images.
-        :param dump_path:
-        :param observations:
-        :return:
+        :param dump_path: path to dump the observations.
+        :param observations: observations to dump .
+        :param observation_space: observation space based on which we dump.
         """
+        if observation_space is None:
+            observation_space = self.observations
+
 
         # TODO: infinite recursion -> we interate over self.observations !!!
-        for observation_name, extractor in self.observations.items():
-            print(observation_name)
+        for observation_name, extractor in observation_space.items():
             output_file = dump_path.with_name(dump_path.stem + f"_{observation_name}")
             if isinstance(extractor, PixelsObservation):
                 pixels = observations[observation_name]
-                if len(pixels.shape()) == 3:
+                if len(pixels.shape) == 3:
                     for i, subpixels in enumerate(pixels):
                         image_file = output_file.with_name(output_file.stem + f"_{i}").with_suffix(".png")
                         Image.fromarray(subpixels).save(image_file)
                 else:
+                    print(observation_name, pixels.shape, np.max(pixels))
                     image_file = output_file.with_suffix(".png")
-                    Image.fromarray(observations[observation_name]).save(image_file)
+                    Image.fromarray(pixels).save(image_file)
             elif isinstance(extractor, dict):
-                print(extractor.keys())
                 self.dump_observations(
-                    dump_path.with_name(dump_path.stem + f"_{observation_name}"), extractor
+                    dump_path.with_name(dump_path.stem + f"_{observation_name}"), observations[observation_name], extractor
                 )
             else:
                 log_file = output_file.with_suffix(".log")
                 with open(log_file, "w") as f:
-                    f.write(str(observations[observation_name]))
+                    f.write(str(observations))
 
 
 dtype_sizes = {
     np.float32: 128,
-    np.dtypes.Float32DType(): 128,
+    np.dtype(np.float32): 128,
     np.int32: 64,
-    np.dtypes.Int32DType(): 64,
+    np.dtype(np.int32): 64,
     np.uint16: 16,
-    np.dtypes.UInt16DType(): 64,
+    np.dtype(np.uint16): 16,
     np.uint8 : 8,
-    np.dtypes.UInt8DType(): 64,
+    np.dtype(np.uint8): 8,
 }
 

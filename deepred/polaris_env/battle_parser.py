@@ -13,7 +13,8 @@ class BattleState(IntEnum):
     REPLACE_MOVE = 4
     ABANDON_MOVE = 5
     NOT_IN_BATTLE = 6
-    OTHER = 7
+    SKIPPABLE = 7
+    OTHER = 8
 
 
 def parse_battle_state(gamestate: GameState) -> BattleState:

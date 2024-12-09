@@ -34,25 +34,23 @@ class VisitedTiles(AdditionalMemoryBlock):
         Keeps track of tiles previously visited.
         """
         if gamestate.map not in self.visited_tiles:
-            self.visited_tiles[gamestate.map] = np.zeros(MapDimensions[gamestate.map].shape, dtype=np.uint8)
+            map_w, map_h = MapDimensions[gamestate.map].shape
+            self.visited_tiles[gamestate.map] = np.zeros((map_h, map_w), dtype=np.uint8)
 
         # TODO: unsure how to set the values.
         #   We need something that let us know we already walked in some places at some point in time,
         #   The agent will have to go multiple times to some places.
         #   Could use step counter.
-        uint8_flag_count = round(255 * gamestate.event_flag_count / len(EventFlag))
-        self.visited_tiles[gamestate.map][gamestate.pos_x, gamestate.pos_y] = uint8_flag_count
+        uint8_flag_count = round(255 * gamestate.event_flag_count / len(ProgressionFlag))
+        self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = uint8_flag_count
 
     def get(
             self,
             gamestate: "GameState"
     ):
         """
-        recent visited tiles are set to 255, decrementing to 0 for each event that was triggered since the visit to the
-        tile.
         """
-        uint8_flag_count = round(255 * gamestate.event_flag_count / len(EventFlag))
-        return 255 - (uint8_flag_count - self.visited_tiles[gamestate.map])
+        return self.visited_tiles[gamestate.map]
 
 
 

@@ -1,6 +1,6 @@
 from functools import partial
 from pathlib import Path
-from typing import Union, Tuple
+from typing import Union, Tuple, Callable
 
 import mediapy
 from gymnasium.error import ResetNeeded
@@ -9,7 +9,7 @@ from pyboy.utils import WindowEvent
 from deepred.polaris_env.action_space import CustomEvent
 from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.battle_parser import parse_battle_state, BattleState
-from deepred.polaris_env.pokemon_red.enums import StartMenuItem
+from deepred.polaris_env.pokemon_red.enums import StartMenuItem, RamLocation
 from deepred.polaris_env.game_patching import GamePatching
 from deepred.polaris_env.agent_helper import AgentHelper
 from deepred.polaris_env.gamestate import GameState
@@ -22,7 +22,7 @@ RELEASE_EVENTS = {
     WindowEvent.PRESS_BUTTON_A: WindowEvent.RELEASE_BUTTON_A,
     WindowEvent.PRESS_BUTTON_B: WindowEvent.RELEASE_BUTTON_B,
     WindowEvent.PRESS_BUTTON_START: WindowEvent.RELEASE_BUTTON_START,
-    WindowEvent.PASS: None
+    WindowEvent.PASS: WindowEvent.PASS
 }
 
 
@@ -140,7 +140,7 @@ class GBConsole(PyBoy):
     def step_event(
             self,
             event: WindowEvent
-    ) -> GameState:
+    ):
         """
         Sends the event to the console, and steps the console until the player is actionable once more.
         :param event: event to send to the console.
@@ -150,11 +150,10 @@ class GBConsole(PyBoy):
         # In order for actions to be stateless, we need to send it for 8 frames.
         self.send_input(event)
         self.tick(8, render=self.render and self.record_skipped_frames)
-        if event != WindowEvent.PASS:
-            self.send_input(RELEASE_EVENTS[event])
+        self.send_input(RELEASE_EVENTS[event])
         # Skip frames until we are actionable.
         try:
-            return self.skip_frames()
+            self.skip_frames()
         except RecursionError as e:
             self.handle_error("Stuck stepping the console.")
 
@@ -169,7 +168,7 @@ class GBConsole(PyBoy):
     def add_video_frame(self):
         self.recorder.add_image(self._gamestate.screen)
 
-    def skip_frames(self) -> GameState:
+    def skip_frames(self):
         """
         Skips the game until we know the player can act.
         min_frame_skip is to ensure we can have an actionable action after walking.
@@ -193,18 +192,13 @@ class GBConsole(PyBoy):
 
             self._gamestate = gamestate
             if self._gamestate.is_skippable_frame():
-                total_frames_ticked -= skip_count * 0.75 # make sure we do not skip forever.
+                total_frames_ticked -= skip_count * 0.98 # make sure we do not skip forever.
                 additional_skip += 1
                 if additional_skip > 500:
                     self.handle_error("stuck skipping.")
 
         self._step += 1
-        self._gamestate = self.tick(1, render=True)
 
-        # Is this fine to patch here ?
-        self.game_patcher.patch(self._gamestate)
-
-        return self._gamestate
 
     def validate_input(
             self,
@@ -224,6 +218,26 @@ class GBConsole(PyBoy):
 
         return True
 
+
+    def step_force_ram(
+            self,
+            ram_modifier: Callable,
+            num_frames=20,
+            event=WindowEvent.PASS
+    ):
+        """
+        Utility function to run the game forcing some ram values.
+
+        """
+        self.send_input(event)
+        for i in range(num_frames):
+            if i == 8:
+                self.send_input(RELEASE_EVENTS[event])
+
+            gamestate = self.tick(1, render=self.render or self.record_skipped_frames)
+            ram_modifier(gamestate._ram)
+
+
     def handle_world_event(
             self,
             event: WindowEvent
@@ -242,11 +256,11 @@ class GBConsole(PyBoy):
             # We should not be able to open any other menu beside the shop menu if we disable the START menu
             # but ok .
             if self._gamestate.is_at_pokemart and self._gamestate.mart_items:
-                finalise = self.agent_helper.shopping(self._gamestate)
+                finalise = not self.agent_helper.shopping(self._gamestate)
             elif self._gamestate.can_use_pc:
-                finalise = self.agent_helper.manage_party(self._gamestate)
+                finalise = not self.agent_helper.manage_party(self._gamestate)
             else:
-                finalise = self.agent_helper.field_move(self._gamestate, self.step_event)
+                finalise = not self.agent_helper.field_move(self._gamestate, self.step_force_ram)
 
         return finalise
 
@@ -265,6 +279,10 @@ class GBConsole(PyBoy):
             battle_state = parse_battle_state(self._gamestate)
             if battle_state in (BattleState.NOT_IN_BATTLE, BattleState.ACTIONABLE):
                 break
+            elif battle_state == BattleState.SKIPPABLE:
+                self.step_event(WindowEvent.PASS)
+                finalise = False
+
             elif battle_state == BattleState.OTHER:
                 self.step_event(WindowEvent.PRESS_BUTTON_A)
                 finalise = False
@@ -301,13 +319,10 @@ class GBConsole(PyBoy):
             self,
             event: WindowEvent | CustomEvent
     ) -> GameState:
-        # TODO: clean up, manage better additional memory
 
         if event == CustomEvent.ROLL_PARTY:
             self.agent_helper.roll_party(gamestate=self._gamestate)
-            gamestate = GameState(self)
-            self._additional_memory.update(gamestate)
-            return gamestate
+            return self.get_actionable_frame()
 
         if self._gamestate.is_in_battle:
             finalise = self.handle_battle_event(event)
@@ -315,14 +330,18 @@ class GBConsole(PyBoy):
             finalise = self.handle_world_event(event)
 
         if finalise:
-            gamestate = self.step_event(event)
-            self._additional_memory.update(gamestate)
-            return gamestate
+            self.step_event(event)
 
-        gamestate = GameState(self)
-        self._additional_memory.update(gamestate)
-        return gamestate
+        return self.get_actionable_frame()
 
+
+    def get_actionable_frame(self) -> GameState:
+
+        self._gamestate = self.tick(1, render=True)
+        # Is this fine to patch here ?
+        self.game_patcher.patch(self._gamestate)
+        self._additional_memory.update(self._gamestate)
+        return self._gamestate
 
     def handle_error(
             self,

@@ -18,7 +18,7 @@ def run(
      enabled_patches: Tuple[str] = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                                     "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
      reward_scales: dict = dict(seen_pokemons=0.1, experience=2, badges=5),
-     savestate: str | None = "faster_red_post_parcel_pokeballs.state",
+     savestate: str | None = "save.state",
      session_path: str = "red_tests",
      record: bool = False,
      speed_limit: int = 1,
@@ -52,7 +52,7 @@ def run(
     action = None
 
     for i in range(2048):
-        if env0.input_interface.human_inputs:
+        if not env0.input_interface.human_inputs:
             action = env0.action_space.sample()
         env_outputs = []
         for env in envs:

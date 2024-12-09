@@ -59,7 +59,8 @@ class PokemonStats:
         """
         Returns the stats of the pokemon, scaled to the level (can specify a custom level), ev, and iv.
         """
-        level = level if level is None else self.level
+
+        level = self.level if level is None else level
         return PokemonBaseStats(
             hp=compute_stat(self.base_stats.hp, level, self.evs.hp, self.ivs.hp, is_hp=True),
             attack=compute_stat(self.base_stats.attack, level, self.evs.attack, self.ivs.attack),

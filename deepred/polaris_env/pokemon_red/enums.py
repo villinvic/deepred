@@ -146,6 +146,8 @@ class RamLocation(IntEnum):
     SCROLL_OFFSET_VALUE = 0xCC36
     FIELD_MOVE = 0xCD3D
 
+    WALKBIKESURF_STATE = 0xD700
+
 
 
 

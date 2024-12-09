@@ -143,11 +143,14 @@ class GameState:
         """
         :return: True if we are currently at a dialog frame. Utility for skipping dialogs.
         """
+        if self.is_at_pokecenter:
+            print(self.textbox_id)
+            return self.textbox_id == 1
         return (
                 self.start_menu_item == StartMenuItem.UNSELECTED
                 and not self.is_in_battle
                 and self.open_text_box
-                and not self.textbox_id in {6, 11, 12, 13, 14, 20, 28}
+                and (not self.textbox_id in {6, 11, 12, 13, 14, 20, 28})
                 and not self.is_playing_party_animations == 64
                 and not self.open_town_map
                 and (self.item_cursor_x, self.item_cursor_y) == (0, 0)
@@ -311,6 +314,13 @@ class GameState:
         :returns: True if a menu is open.
         """
         return self._read(RamLocation.MENU_STATE) == 0
+
+    @cproperty
+    def walk_bike_surf_state(self) -> int:
+        """
+        :return: state of the player when walking, surfing, biking
+        """
+        return self._read(RamLocation.WALKBIKESURF_STATE)
 
     @cproperty
     def is_playing_party_animations(self) -> int:
@@ -531,7 +541,7 @@ class GameState:
         return [
             hp,  # current hp
             int(hp > 0),  # knocked out ?
-            hp / max_hp,
+            hp / (max_hp+1e-8),
             max_hp,
             self._read(start_address + 33) / 100, # level
             self._read_double(start_address + 36) / 134, # attack
@@ -851,7 +861,9 @@ class GameState:
         """
         Items of the mart currently interacting with.
         """
-        mart_identifier = f"{self.map.name}@{self.pos_x},{self.pos_y},{self.player_orientation.name}"
+        x, y = get_looking_at_coords(self, absolute=True, distance=2)
+        mart_identifier = f"{self.map.name}@{x},{y}"
+        print(mart_identifier)
         return MartInfos.get(mart_identifier, MartInfo()).items
 
     @cproperty
@@ -921,6 +933,7 @@ class GameState:
     @cproperty
     def bottom_right_screen_tiles(self) -> np.ndarray:
         """
+        TODO: UNUSED
         :return: values of the bottom right tiles.
         """
         screen_tiles = self._ram_helper._get_screen_background_tilemap()
@@ -985,7 +998,7 @@ class GameState:
         # TODO: clarify whats going on here.
 
         visited_tiles_on_current_map = np.zeros((9, 10), dtype=np.uint8)
-        map_h, map_w = MapDimensions[self.map].shape
+        map_w, map_h = MapDimensions[self.map].shape
         pos_x, pos_y = self.pos_x, self.pos_y
 
         cur_top_left_x = pos_x - 4
@@ -1004,9 +1017,14 @@ class GameState:
         if cur_top_left_y < 0:
             adjust_y = -cur_top_left_y
 
+        visited = self._additional_memory.visited_tiles.get(self)[top_left_y: bottom_right_y, top_left_x:bottom_right_x]
+        cur_uint8_flag_count = round(255 * self.event_flag_count / len(ProgressionFlag))
+        d = cur_uint8_flag_count - visited
+        observed = (255 - d) * np.int32(visited > 0)
+
         visited_tiles_on_current_map[
         adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
-        ] = self._additional_memory.visited_tiles.get(self)[top_left_y: bottom_right_y, top_left_x:bottom_right_x]
+        ] = observed
 
         return visited_tiles_on_current_map
 
@@ -1047,7 +1065,7 @@ class GameState:
     @cproperty
     def warp_map(self) -> np.ndarray:
         """
-        A map of visible warps.
+        A map of visible warps.F
         # Warps have their own id, are embeddings really necessary ?
         """
         warp_map = np.zeros((9, 10), dtype=np.uint16)
@@ -1080,14 +1098,15 @@ class GameState:
 
         for warp in warps:
             if top_left_x <= warp.x <= bottom_right_x and top_left_y <= warp.y <= bottom_right_y:
-                if warp.destination != Map.UNKNOWN:
-                    destination = warp.destination
-                else:
+                if warp.destination == Map.UNKNOWN:
                     last_map_id = self._read(RamLocation.LAST_MAP)
                     destination = Map(last_map_id)
+                else:
+                    destination = warp.destination
+
 
                 # TODO: take care of unknown warps.
-                encoded_warp = NamedWarpIds[f"{destination.name}@{warp.id}"]
+                encoded_warp = NamedWarpIds[f"{destination.name}@{warp.id - 1}"]
                 warp_map[warp.y - top_left_y, warp.x - top_left_x] = encoded_warp + 1
 
         return warp_map
@@ -1110,27 +1129,27 @@ class GameState:
 
         bottom_left_screen_tiles = self.bottom_left_screen_tiles
         # walkable
-        maps[0] = self._ram_helper._get_screen_walkable_matrix()
+        maps[0] = self._ram_helper._get_screen_walkable_matrix() * 255
 
         # Water
         if self.tileset_id == TileSet.VERMILION_PORT:
-            maps[5] = (bottom_left_screen_tiles == 20).astype(np.uint8)
+            maps[5] = (bottom_left_screen_tiles == 20).astype(np.uint8) * 255
         elif self.tileset_id in [TileSet.OVERWORLD, TileSet.FOREST, TileSet.TILESET_5, TileSet.GYM, TileSet.TILESET_13,
                                  TileSet.TILESET_17, TileSet.TILESET_22, TileSet.TILESET_23]:
-            maps[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.uint8)
+            maps[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.uint8) * 255
 
         if self.tileset_id == TileSet.OVERWORLD:  # is overworld
             # tree
-            maps[1] = (bottom_left_screen_tiles == 61).astype(np.uint8)
+            maps[1] = (bottom_left_screen_tiles == 61).astype(np.uint8) * 255
             # ledge down
-            maps[2] = np.isin(bottom_left_screen_tiles, [54, 55]).astype(np.uint8)
+            maps[2] = np.isin(bottom_left_screen_tiles, [54, 55]).astype(np.uint8) * 255
             # ledge left
-            maps[3] = (bottom_left_screen_tiles == 39).astype(np.uint8)
+            maps[3] = (bottom_left_screen_tiles == 39).astype(np.uint8) * 255
             # ledge right
-            maps[4] = np.isin(bottom_left_screen_tiles, [13, 29]).astype(np.uint8)
+            maps[4] = np.isin(bottom_left_screen_tiles, [13, 29]).astype(np.uint8) * 255
         elif self.tileset_id == TileSet.GYM:
             # tree
-            maps[1] = (bottom_left_screen_tiles == 80).astype(np.uint8)  # 0x50
+            maps[1] = (bottom_left_screen_tiles == 80).astype(np.uint8) * 255 # 0x50
 
         maps[6] = self.visited_tiles
 
@@ -1144,7 +1163,7 @@ class GameState:
         box_pokemon_stats = []
         for i in range(self.box_pokemon_count):
             offset = RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS
-            species = self._read(offset)
+            species = self._read(RamLocation.BOX_POKEMON_SPECIES_START + i)
             level = self._read(offset + 3)
             exp = self._read_triple(offset + 14)
             hp_ev = self._read_double(offset + 17)
@@ -1211,7 +1230,8 @@ class GameState:
         """
         Index of the pokemon with the highest stat sum in the box
         """
-        return 0 if self.box_pokemon_count == 0 else np.argmax(self.box_pokemon_stat_sums)
+        print(self.box_pokemon_stat_sums, self.party_pokemon_stat_sums)
+        return 0 if self.box_pokemon_count == 0 else int(np.argmax(self.box_pokemon_stat_sums))
         
     @cproperty
     def party_pokemon_stat_sums(self) -> List[int]:
@@ -1238,7 +1258,7 @@ class GameState:
         """
         Index of the pokemon with the lowest stat sum in the party
         """
-        return np.argmin(self.party_pokemon_stat_sums)
+        return int(np.argmin(self.party_pokemon_stat_sums))
 
     @cproperty
     def has_better_pokemon_in_box(self) -> bool:
@@ -1315,3 +1335,22 @@ def assign_new_sprite_in_sprite_minimap(
     top_left_y = y - 4
     if x >= top_left_x and x < top_left_x + 10 and y >= top_left_y and y < top_left_y + 9:
         minimap[y - top_left_y, x - top_left_x] = sprite_id
+
+def get_looking_at_coords(gamestate: GameState, absolute=False, distance=1) -> Tuple[int, int]:
+
+    if absolute:
+        x = gamestate.pos_x
+        y = gamestate.pos_y
+    else:
+        # relative position w.r.t. screen center
+        x = 4
+        y = 4
+    if gamestate.player_orientation == Orientation.LEFT:
+        x -= distance
+    elif gamestate.player_orientation == Orientation.RIGHT:
+        x += distance
+    elif gamestate.player_orientation == Orientation.UP:
+        y -= distance
+    elif gamestate.player_orientation == Orientation.DOWN:
+        y += distance
+    return x, y
