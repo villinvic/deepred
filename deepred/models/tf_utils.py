@@ -76,7 +76,7 @@ def normalize_tuple(value, n, name):
                 )
         return value_tuple
 
-class AdaptiveMaxPooling2D(tf.keras.layers.Layer):
+class AdaptiveMaxPooling2D(snt.Module):
     """
     TF alternative of the pytorch's AdaptiveMaxPool2d
 
@@ -116,7 +116,8 @@ class AdaptiveMaxPooling2D(tf.keras.layers.Layer):
         self.output_size = normalize_tuple(output_size, 2, "output_size")
         super().__init__(**kwargs)
 
-    def call(self, inputs, *args):
+    @snt.once
+    def initialise(self, inputs):
         if self.channels_last:
             shape = tf.shape(inputs)[-3:-1]
             data_format = "channels_last" #"NHWC"
@@ -127,19 +128,17 @@ class AdaptiveMaxPooling2D(tf.keras.layers.Layer):
         stride1 = (shape[0] // self.output_size[0])
         stride2 = (shape[1] // self.output_size[1])
 
-        kernel_size1 = int(shape[0] - (self.output_size[0] - 1) * stride1)
-        kernel_size2 = int(shape[1] - (self.output_size[1] - 1) * stride2)
+        kernel_size1 = shape[0] - (self.output_size[0] - 1) * stride1
+        kernel_size2 = shape[1] - (self.output_size[1] - 1) * stride2
 
-        return tf.keras.layers.MaxPool2D(
+        self.maxpool_op = tf.keras.layers.MaxPool2D(
             pool_size=(kernel_size1, kernel_size2),
             strides=(stride1, stride2),
             padding="valid",
             data_format=data_format
-        )(inputs)
-        # return tf.nn.max_pool2d(
-        #     inputs,
-        #     ksize=[kernel_size1, kernel_size2],
-        #     strides=(stride1, stride2),
-        #     padding='VALID',
-        #     data_format=data_format
-        # )
+        )
+
+
+    def call(self, inputs, *args):
+        self.initialise(inputs)
+        return self.maxpool_op(inputs)
