@@ -45,7 +45,7 @@ class CartPoleModel(BaseModel):
         #     momentum=0.,
         # )
 
-        self.final_mlp = snt.nets.MLP([64, 64], activate_final=True, activation=lambda x: x)
+        self.final_mlp = snt.nets.MLP([64, 64], activate_final=True)
         self.policy_head = snt.Linear(self.action_space.n)
         self._value_logits = None
         self.value_head = snt.Linear(1)
@@ -133,7 +133,7 @@ class CartPoleModel(BaseModel):
             state
         )
         policy_logits = self.policy_head(final_embeddings)
-        self._values = self.value_head(final_embeddings)[: ,:, 0]
+        self._values = self.value_head(final_embeddings)
         return policy_logits, self._values
 
     def critic_loss(
