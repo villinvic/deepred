@@ -54,11 +54,11 @@ def cfg():
     model_class = 'SimpleModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 64
-    max_seq_len = 64 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 1024 * num_workers
-    n_epochs=3
-    minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    trajectory_length = 256
+    max_seq_len = 256 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    train_batch_size = 256 * num_workers
+    n_epochs=6
+    minibatch_size = train_batch_size//4 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
@@ -70,15 +70,16 @@ def cfg():
     default_policy_config = {
 
         'discount': 0.99,  # rewards are x0,129 after 2048 steps.
-        'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 1e-5, # encourages exploration
+        'gae_lambda': 1., # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
+        'entropy_cost': 0.01, # encourages exploration
         'lr': 5e-4, #5e-4
 
         'grad_clip': 0.5,
         'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
-        'initial_kl_coeff': 0.,
-        "vf_clip": 0.5
+        'initial_kl_coeff': 1.,
+        'kl_target': 0.01,
+        "vf_clip": 5.
         }
 
     policy_params = [{
@@ -103,6 +104,8 @@ def cfg():
 
     restore = False
 
+    name = "train_simple"
+
 @ex.automain
 def main(_config):
     import tensorflow as tf
@@ -120,7 +123,7 @@ def main(_config):
         project="deepred",
         mode='online',
         group="debug",
-        name="train_simple_victor",
+        name=config["name"],
         notes=None,
         dir=config["wandb_logdir"]
     )
