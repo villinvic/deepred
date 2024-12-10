@@ -53,7 +53,7 @@ def cfg():
 
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 1024
-    max_seq_len = 1024 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    max_seq_len = 128 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 2048 * num_workers
     n_epochs=3
     minibatch_size = 1024 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
