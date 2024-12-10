@@ -37,12 +37,13 @@ class CartPoleModel(BaseModel):
         )
 
         self.action_dist = CategoricalDistribution
-        self.optimiser = snt.optimizers.RMSProp(
-            learning_rate=config.lr,
-            epsilon=1e-5,
-            decay=0.99,
-            momentum=0.,
-        )
+        self.optimiser = snt.optimizers.Adam(learning_rate=config.lr)
+        # self.optimiser = snt.optimizers.RMSProp(
+        #     learning_rate=config.lr,
+        #     epsilon=1e-5,
+        #     decay=0.99,
+        #     momentum=0.,
+        # )
 
         self.final_mlp = snt.nets.MLP([64, 64], activate_final=True)
         self.policy_head = snt.Linear(self.action_space.n)
