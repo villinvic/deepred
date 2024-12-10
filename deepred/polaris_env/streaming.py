@@ -19,22 +19,13 @@ class BotStreamer:
             "extra": "",
         }
         self.ws_address = "wss://transdimensional.xyz/broadcast"
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        self.websocket = None
-        self.coord_list = []
 
-        self.queue = Queue()
-        self.loop.create_task(self.process_queue())
+        self.websocket = websockets.connect(self.ws_address)
+        print(f"connected to {self.ws_address}")
+        self.coord_list = []
 
         self.stream_step_counter = 0
         self.upload_interval = 128
-
-    async def process_queue(self):
-        print("HERE")
-        while True:
-            message = await self.queue.get()
-            await self.broadcast_ws_message(message)
 
     def send(self, gamestate: GameState):
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])
@@ -46,23 +37,24 @@ class BotStreamer:
                     "coords": self.coord_list,
                 }
             )
-            self.queue.put_nowait(message)
+            self.broadcast_ws_message(message)
+            print(f"sent message to {self.ws_address}")
             self.stream_step_counter = 0
             self.coord_list = []
 
         self.stream_step_counter += 1
 
-    async def broadcast_ws_message(self, message):
+    def broadcast_ws_message(self, message):
         if self.websocket is None:
-            await self.establish_wc_connection()
+            self.establish_wc_connection()
         if self.websocket is not None:
             try:
-                await self.websocket.send(message)
+                self.websocket.send(message)
             except websockets.exceptions.WebSocketException:
                 self.websocket = None
 
-    async def establish_wc_connection(self):
+    def establish_wc_connection(self):
         try:
-            self.websocket = await websockets.connect(self.ws_address)
+            self.websocket = websockets.connect(self.ws_address)
         except:
             self.websocket = None
