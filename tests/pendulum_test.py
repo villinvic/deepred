@@ -7,7 +7,7 @@ from deepred.polaris_env.polaris_red import PolarisRed
 from deepred.polaris_utils.callbacks import Callbacks
 from polaris.environments.example import PolarisCartPole
 
-exp_name = 'pendulum'
+exp_name = 'cartpole'
 exp_path = "experiments/" + exp_name
 ex = Experiment(exp_name)
 
@@ -26,9 +26,9 @@ def cfg():
 
     num_workers = 64 # the +1 is for the rendering window.
     policy_path = 'polaris.policies.PPO'
-    model_path = 'deepred.models.simple'
+    model_path = 'deepred.models.cartpole'
     policy_class = 'PPO'
-    model_class = 'SimpleModel'
+    model_class = 'CartPoleModel'
 
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 16
@@ -95,7 +95,7 @@ def main(_config):
         project="deepred",
         mode='online',
         group="debug",
-        name="pendulum",
+        name="cartpole",
         notes=None,
         dir=config["wandb_logdir"]
     )
