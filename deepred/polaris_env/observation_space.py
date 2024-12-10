@@ -286,12 +286,12 @@ class PolarisRedObservationSpace:
             #     extractor=lambda gamestate: gamestate.bag_count == 20,
             #     nature=ObsType.BINARY
             # ),
-            # bag_count=RamObservation(
-            #     extractor=lambda gamestate: gamestate.bag_count,
-            #     nature=ObsType.CONTINUOUS,
-            #     scale=1/20,
-            #     domain=(0., 20.),
-            # ),
+            bag_count=RamObservation(
+                extractor=lambda gamestate: gamestate.bag_count,
+                nature=ObsType.CONTINUOUS,
+                scale=1/20,
+                domain=(0., 20.),
+            ),
             coordinates=RamObservation(
                 extractor=lambda gamestate: gamestate.scaled_coordinates,
                 nature=ObsType.CONTINUOUS,
