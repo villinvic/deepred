@@ -63,7 +63,7 @@ class BotStreamer:
 
     async def _establish_connection(self):
         try:
-            self.websocket = websockets.connect(self.ws_address)
+            self.websocket = await websockets.connect(self.ws_address)
             print(f"connected to {self.ws_address}")
         except:
             self.websocket = None
