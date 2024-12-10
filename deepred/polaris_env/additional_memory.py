@@ -42,7 +42,10 @@ class VisitedTiles(AdditionalMemoryBlock):
         #   The agent will have to go multiple times to some places.
         #   Could use step counter.
         uint8_flag_count = round(255 * gamestate.event_flag_count / len(ProgressionFlag))
-        self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = uint8_flag_count
+        try :
+            self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = uint8_flag_count
+        except:
+            print(MapDimensions[gamestate.map].shape, gamestate.pos_y, gamestate.pos_x)
 
     def get(
             self,
@@ -94,11 +97,6 @@ class FlagHistory(AdditionalMemoryBlock):
     ):
         if self._previous_event_flags is not None:
             new_events = np.argwhere(gamestate.event_flags-self._previous_event_flags == 1)
-            for e in new_events:
-                e = int(e[0])
-                for i, f in enumerate(ProgressionFlag):
-                    if i == e:
-                        print(f)
             for new_event in new_events:
                 self.flag_history.pop(0)
                 self.flag_history.append(new_event[0])

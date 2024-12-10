@@ -22,7 +22,8 @@ def cfg():
     env_config = dict(
         game_path = game_path,
         episode_length = 2048 * 64,# 1024 * 1000 * 30, # 2048 is short, for debugging purposes.
-        enable_start = True,
+        enable_start = False,
+        enable_roll_party = True,
         enable_pass = False,
         downscaled_screen_shape = (36, 40),
         framestack = 3,
@@ -31,9 +32,9 @@ def cfg():
         flag_history_length = 10,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=1, experience=10, badges=100, exploration=4),
+        reward_scales = dict(seen_pokemons=1, experience=10, badges=100, events=5,  exploration=0),
         reward_laziness_check_freq = 2048*4,
-        reward_laziness_limit = 2048,
+        reward_laziness_limit = 2048*2,
         savestate = "faster_red_post_parcel_pokeballs.state",
         session_path = "red_tests",
         record = False,
@@ -44,18 +45,18 @@ def cfg():
 
     env = PolarisRed.env_id
 
-    num_workers = 8 # the +1 is for the rendering window.
+    num_workers = 64 # the +1 is for the rendering window.
     policy_path = 'polaris.policies.PPO'
     model_path = 'deepred.models.boeysbaseline'
     policy_class = 'PPO'
     model_class = 'BoeysBaselineModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 2048
-    max_seq_len = 2048 * num_workers # if we use RNNs, this should be set to something like 16 or 32.
-    train_batch_size = 2048
+    trajectory_length = 1024
+    max_seq_len = 1024 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    train_batch_size = 2048 * num_workers
     n_epochs=3
-    minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    minibatch_size = 1024 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
@@ -68,13 +69,14 @@ def cfg():
 
         'discount': 0.999,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 0., # encourages exploration
-        'lr': 5e-4,
+        'entropy_cost': 1e-3, # encourages exploration
+        'lr': 3e-4, #5e-4
 
         'grad_clip': 0.5,
         'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
         'initial_kl_coeff': 0.,
+        "vf_clip": 0.5
         }
 
     policy_params = [{

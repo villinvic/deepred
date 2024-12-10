@@ -254,6 +254,7 @@ class BattleType(IntEnum):
     NONE = 0
     WILD = 1
     TRAINER = 2
+    OTHER = 255
 
 class BattleKind(IntEnum):
     NORMAL = 0

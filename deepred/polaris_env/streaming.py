@@ -18,7 +18,7 @@ class BotStreamer:
         self.loop.run_until_complete(
             self.establish_wc_connection()
         )
-        self.upload_interval = 2048
+        self.upload_interval = 512
         self.stream_step_counter = 0
         self.coord_list = []
 

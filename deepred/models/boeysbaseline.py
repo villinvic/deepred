@@ -58,7 +58,7 @@ class BoeysBaselineModel(BaseModel):
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
             for num_ch, kernel_size, stride, padding in [(64, 8, 4, padder), (128, 4, 2, padder2), (128, 3, 1, "VALID")]
         ]
-        self.screen_conv_max_pool = AdaptiveMaxPooling2D((9,9))
+        self.screen_conv_max_pool = tf.keras.layers.MaxPooling2D((3, 1), strides=(3, 1))
 
         self.map_features_conv_layers = [
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
@@ -68,22 +68,16 @@ class BoeysBaselineModel(BaseModel):
         self.screen_embedding = snt.nets.MLP([512], activate_final=True)
         self.map_features_embedding = snt.nets.MLP([512], activate_final=True)
         self.moves_mlp = snt.nets.MLP([8, 8], activate_final=True)
-        self.moves_max_pool = AdaptiveMaxPooling2D((1, 8), channels_last=False)
 
         self.pokemons_mlp = snt.nets.MLP([64, 64], activate_final=True)
         self.party_head_embedding = snt.nets.MLP([64, 64], activate_final=True)
         self.opp_head_embedding = snt.nets.MLP([64, 64], activate_final=True)
-        self.party_head_max_pool = AdaptiveMaxPooling2D((1, 64), channels_last=False)
-        self.opp_head_max_pool = AdaptiveMaxPooling2D((1, 64), channels_last=False)
 
         self.items_mlp = snt.nets.MLP([32, 32], activate_final=True)
-        self.items_max_pool = AdaptiveMaxPooling2D((1, 32), channels_last=False)
 
         self.events_mlp = snt.nets.MLP([64, 64], activate_final=True)
-        self.events_max_pool = AdaptiveMaxPooling2D((1, 64), channels_last=False)
 
         self.maps_mlp = snt.nets.MLP([32, 32], activate_final=True)
-        self.maps_max_pool = AdaptiveMaxPooling2D((1, 32), channels_last=False)
 
         self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True)
         self.warps_embedding = snt.Embed(len(NamedWarpIds), 8, densify_gradients=True)
@@ -130,7 +124,7 @@ class BoeysBaselineModel(BaseModel):
         conv_out_flat = snt.Flatten(1)(conv_out)
         screen_embed = self.screen_embedding(conv_out_flat)
 
-        feature_maps = tf.transpose(tf.expand_dims(tf.cast(obs["feature_maps"], tf.float32) / 255., axis=0), perm=[0, 1, 3, 4, 2])
+        feature_maps = tf.transpose(tf.expand_dims(tf.cast(obs["feature_maps"], tf.float32) / 255., axis=0), perm=[0, 2, 3, 1])
         sprite_map = tf.expand_dims(self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64)), axis=0)
         warp_map = tf.expand_dims(self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64)), axis=0)
         feature_maps = tf.concat([feature_maps, sprite_map, warp_map], axis=-1)
@@ -237,11 +231,11 @@ class BoeysBaselineModel(BaseModel):
         pokemons_info = tf.concat([moves_embed, types, stats], axis=-1)
         pokemons_embed = self.pokemons_mlp(pokemons_info)
 
-        party_pokemon_embed = pokemons_embed[:, :6, :]
+        party_pokemon_embed = pokemons_embed[:, :, :6, :]
         party_head_embed = self.party_head_embedding(party_pokemon_embed)
         party_head_embed = tf.reduce_max(party_head_embed, axis=-2)
 
-        opp_pokemon_embed = pokemons_embed[..., 6:, :]
+        opp_pokemon_embed = pokemons_embed[:, :, 6:, :]
         poke_opp_head = self.opp_head_embedding(opp_pokemon_embed)
         poke_opp_head = tf.reduce_max(poke_opp_head, axis=-2)
 

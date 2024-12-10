@@ -858,7 +858,6 @@ class GameState:
         """
         x, y = get_looking_at_coords(self, absolute=True, distance=2)
         mart_identifier = f"{self.map.name}@{x},{y}"
-        print(mart_identifier)
         return MartInfos.get(mart_identifier, MartInfo()).items
 
     @cproperty
@@ -1017,9 +1016,12 @@ class GameState:
         d = cur_uint8_flag_count - visited
         observed = (255 - d) * np.int32(visited > 0)
 
-        visited_tiles_on_current_map[
-        adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
-        ] = observed
+        try:
+            visited_tiles_on_current_map[
+            adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
+            ] = observed
+        except:
+            print(MapDimensions[self.map], self.pos_x, self.pos_y)
 
         return visited_tiles_on_current_map
 

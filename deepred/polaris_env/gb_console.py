@@ -121,6 +121,7 @@ class GBConsole(PyBoy):
         self._step = 0
         self._additional_memory = self._additional_memory_maker()
         self._gamestate = self.tick(2)
+        self.game_patcher.patch(self._gamestate)
         self._additional_memory.update(self._gamestate)
         return self._gamestate
 

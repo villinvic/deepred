@@ -116,14 +116,17 @@ class AdaptiveMaxPooling2D(snt.Module):
         self.output_size = normalize_tuple(output_size, 2, "output_size")
         super().__init__(**kwargs)
 
+        if self.channels_last:
+            self.data_format = "channels_last" #"NHWC"
+            self.input_shape_getter = lambda inputs:  tf.shape(inputs)[-3:-1]
+        else:
+            self.data_format = "channels_first"  #"NCHW"
+            self.input_shape_getter = lambda inputs:  tf.shape(inputs)[-2:]
+
+
     @snt.once
     def initialise(self, inputs):
-        if self.channels_last:
-            shape = tf.shape(inputs)[-3:-1]
-            data_format = "channels_last" #"NHWC"
-        else:
-            shape = tf.shape(inputs)[-2:]
-            data_format = "channels_first" #"NCHW"
+        shape = self.input_shape_getter(inputs)
 
         stride1 = (shape[0] // self.output_size[0])
         stride2 = (shape[1] // self.output_size[1])
@@ -135,10 +138,10 @@ class AdaptiveMaxPooling2D(snt.Module):
             pool_size=(kernel_size1, kernel_size2),
             strides=(stride1, stride2),
             padding="valid",
-            data_format=data_format
+            data_format=self.data_format
         )
 
 
-    def call(self, inputs, *args):
+    def __call__(self, inputs, *args):
         self.initialise(inputs)
         return self.maxpool_op(inputs)

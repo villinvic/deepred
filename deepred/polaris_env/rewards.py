@@ -29,7 +29,7 @@ class Goals(NamedTuple):
     seen_pokemons: float = 0
     badges: float = 0
     experience: float = 0
-
+    events: float = 0
     # computed with map-(event flags) hash
     exploration: float = 0
 
@@ -76,6 +76,7 @@ class PolarisRedRewardFunction:
         """
         self.episode_max_party_exp = -np.inf
         self.episode_max_level = -np.inf
+        self.episode_max_event_count = 0
 
         self.scales = Goals() if reward_scales is None else Goals(** reward_scales)
         self.delta_goals = Goals()
@@ -87,8 +88,6 @@ class PolarisRedRewardFunction:
         self._cumulated_rewards = Goals()
         self._previous_goals = self._extract_goals(inital_gamestate)
         self.count_based_exploration_scales = count_based_exploration_scales
-
-
 
     def _extract_goals(
             self,
@@ -110,7 +109,12 @@ class PolarisRedRewardFunction:
             # So we keep the episode maximum level to prevent that.
             self.episode_max_level = max_level
 
+        event_count = gamestate.event_flag_count
+        if event_count > self.episode_max_event_count:
+            self.episode_max_event_count = event_count
+
         map_event_flag_hash = hash_function((gamestate.map, gamestate.event_flags))
+
         if map_event_flag_hash not in self.visited_hash:
             self.total_exploration += self.count_based_exploration_scales[map_event_flag_hash]
             self.visited_hash.add(map_event_flag_hash)
@@ -119,6 +123,7 @@ class PolarisRedRewardFunction:
             seen_pokemons=seen_pokemons,
             badges=badges,
             experience=self.episode_max_party_exp,
+            events=self.episode_max_event_count,
             exploration=self.total_exploration
         )
 
@@ -139,6 +144,7 @@ class PolarisRedRewardFunction:
             seen_pokemons=goal_updates.seen_pokemons,
             badges=goal_updates.badges,
             experience=goal_updates.experience / self.episode_max_level**3,
+            events=goal_updates.events,
             exploration=goal_updates.exploration
         )
         self._cumulated_rewards = accumulate_goal_stats(rewards, self._cumulated_rewards)

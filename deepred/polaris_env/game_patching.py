@@ -178,7 +178,7 @@ def freshwater_trade_patch(
         ram,
         gamestate: GameState
 ):
-    if gamestate.step == 1:
+    if gamestate.step <= 1:
         ram[0xD778] = set_bit(ram[0x778], 4)
 
 
