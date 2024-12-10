@@ -42,14 +42,14 @@ def cfg():
 
     default_policy_config = {
 
-        'discount': 0.99,  # rewards are x0,129 after 2048 steps.
-        'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
+        'discount': 0.98,  # rewards are x0,129 after 2048 steps.
+        'gae_lambda': 1., # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
         'entropy_cost': 1e-5, # encourages exploration
         'lr': 5e-4, #5e-4
 
         'grad_clip': 100.,
         'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
-        'baseline_coeff': 0.5,
+        'baseline_coeff': 0.1,
         'initial_kl_coeff': 0.,
         "vf_clip": 100.
         }
