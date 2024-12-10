@@ -56,7 +56,7 @@ class BotStreamer:
         if self.websocket is not None:
             try:
                 print("sending message.")
-                await self.websocket.connection.send(message)
+                await self.websocket.send(message)
                 print("sent message.")
             except websockets.exceptions.WebSocketException:
                 self.websocket = None
