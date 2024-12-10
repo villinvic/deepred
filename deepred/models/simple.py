@@ -58,7 +58,7 @@ class SimpleModel(BaseModel):
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
             for num_ch, kernel_size, stride, padding in [(64, 8, 4, padder), (128, 4, 2, padder2), (128, 3, 1, "VALID")]
         ]
-        self.screen_conv_max_pool = AdaptiveMaxPooling2D((9,9))
+        self.screen_conv_max_pool = tf.keras.layers.MaxPooling2D((3, 1), strides=(3, 1))
 
         self.map_features_conv_layers = [
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
