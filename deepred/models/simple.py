@@ -75,10 +75,10 @@ class SimpleModel(BaseModel):
         self.warps_embedding = snt.Embed(len(NamedWarpIds), 8, densify_gradients=True)
         self.maps_embedding = snt.Embed(len(Map), 32, densify_gradients=True)
 
-        self.final_mlp = snt.nets.MLP([32], activate_final=True)
-        self.policy_head = snt.Linear(self.action_space.n)
+        self.final_mlp = snt.nets.MLP([32], activate_final=True, name="final_mlp")
+        self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
         self._value_logits = None
-        self.value_head = snt.Linear(1)
+        self.value_head = snt.Linear(1, name="value_head")
 
         # num_value_bins = config.get("num_value_bins", [256])
         # value_bounds = config.get("value_bounds", (-5., 5.))
