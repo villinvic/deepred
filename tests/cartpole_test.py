@@ -28,7 +28,7 @@ def cfg():
 
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 64
-    max_seq_len = 64 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    max_seq_len = 32 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 64 * num_workers
     n_epochs= 6
     minibatch_size = 128 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
@@ -44,7 +44,7 @@ def cfg():
 
         'discount': 0.99,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 1., # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 0., # encourages exploration
+        'entropy_cost': 0.05, # encourages exploration
         'lr': 3e-4, #5e-4
 
         'grad_clip': 100.,
