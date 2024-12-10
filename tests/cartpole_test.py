@@ -27,11 +27,11 @@ def cfg():
     model_class = 'CartPoleModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 64
+    trajectory_length = 32
     max_seq_len = 32 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 64 * num_workers
     n_epochs= 6
-    minibatch_size = 128 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    minibatch_size = 512 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
@@ -47,11 +47,12 @@ def cfg():
         'entropy_cost': 0., # encourages exploration
         'lr': 3e-4, #5e-4
 
-        'grad_clip': 100.,
-        'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
+        'grad_clip': 20.,
+        'ppo_clip': 0.3, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
-        'initial_kl_coeff': 0.,
-        "vf_clip": 100.
+        'initial_kl_coeff': 1.,
+        'kl_target': 10.,
+        "vf_clip": 1000.
         }
 
     policy_params = [{
