@@ -117,7 +117,7 @@ class PolarisRedRewardFunction:
 
         if map_event_flag_hash not in self.visited_hash:
             # TODO this is for debug
-            self.total_exploration += 1 #self.count_based_exploration_scales[map_event_flag_hash]
+            self.total_exploration += gamestate.pos_x #self.count_based_exploration_scales[map_event_flag_hash]
             self.visited_hash.add(map_event_flag_hash)
 
         return Goals(

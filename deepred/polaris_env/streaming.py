@@ -40,7 +40,6 @@ class BotStreamer:
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])
 
         if self.stream_step_counter >= self.upload_interval:
-            print("here")
             message = json.dumps(
                 {
                     "metadata": self.stream_metadata,
