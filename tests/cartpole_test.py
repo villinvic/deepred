@@ -47,11 +47,11 @@ def cfg():
         'entropy_cost': 1e-5, # encourages exploration
         'lr': 5e-4, #5e-4
 
-        'grad_clip': 0.5,
+        'grad_clip': 100.,
         'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
         'initial_kl_coeff': 0.,
-        "vf_clip": 0.5
+        "vf_clip": 100.
         }
 
     policy_params = [{
