@@ -102,5 +102,5 @@ def main(_config):
 
     from polaris.trainers.sync_trainer import SynchronousTrainer
 
-    trainer = SynchronousTrainer(config, restore=config["restore"])
+    trainer = SynchronousTrainer(config, restore=config["restore"], with_spectator=False)
     trainer.run()
