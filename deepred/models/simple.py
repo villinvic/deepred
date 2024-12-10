@@ -128,7 +128,7 @@ class SimpleModel(BaseModel):
         conv_out_flat = snt.Flatten(1)(conv_out)
         screen_embed = self.screen_embedding(conv_out_flat)
 
-        feature_maps = tf.transpose(tf.expand_dims(tf.cast(obs["feature_maps"], tf.float32) / 255., axis=0), perm=[0, 1, 3, 4, 2])
+        feature_maps = tf.transpose(tf.expand_dims(tf.cast(obs["feature_maps"], tf.float32) / 255., axis=0), perm=[0, 2, 3, 1])
         sprite_map = tf.expand_dims(self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64)), axis=0)
         warp_map = tf.expand_dims(self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64)), axis=0)
         feature_maps = tf.concat([feature_maps, sprite_map, warp_map], axis=-1)
