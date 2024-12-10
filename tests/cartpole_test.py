@@ -30,8 +30,8 @@ def cfg():
     trajectory_length = 32
     max_seq_len = 32 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 64 * num_workers
-    n_epochs= 6
-    minibatch_size = 512 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    n_epochs= 1
+    minibatch_size = train_batch_size # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
