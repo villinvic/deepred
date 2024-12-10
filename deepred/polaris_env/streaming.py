@@ -20,8 +20,7 @@ class BotStreamer:
         }
         self.ws_address = "wss://transdimensional.xyz/broadcast"
 
-        self.websocket = websockets.connect(self.ws_address)
-        print(f"connected to {self.ws_address}")
+        self.websocket = None
         self.coord_list = []
 
         self.stream_step_counter = 0
@@ -49,12 +48,13 @@ class BotStreamer:
             self.establish_wc_connection()
         if self.websocket is not None:
             try:
-                self.websocket.send(message)
+                self.websocket.connection.send(message)
             except websockets.exceptions.WebSocketException:
                 self.websocket = None
 
     def establish_wc_connection(self):
         try:
             self.websocket = websockets.connect(self.ws_address)
+            print(f"connected to {self.ws_address}")
         except:
             self.websocket = None
