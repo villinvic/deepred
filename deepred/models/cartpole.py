@@ -45,8 +45,8 @@ class CartPoleModel(BaseModel):
         #     momentum=0.,
         # )
 
-        self.final_mlp = snt.nets.MLP([64, 64], activate_final=True, name="policy_head")
-        self.policy_head = snt.Linear(self.action_space.n)
+        self.final_mlp = snt.nets.MLP([64, 64], activate_final=True)
+        self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
         self._value_logits = None
         self.value_head = snt.Linear(1, name="value_head")
 
