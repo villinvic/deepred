@@ -62,8 +62,6 @@ class Observation(abc.ABC):
         pass
 
 
-
-
 class RamObservation(Observation):
 
     def __init__(

@@ -23,13 +23,13 @@ def cfg():
         game_path = game_path,
         episode_length = 256,# 1024 * 1000 * 30, # 2048 is short, for debugging purposes.
         enable_start = False,
-        enable_roll_party = True,
+        enable_roll_party = False,
         enable_pass = False,
         downscaled_screen_shape = (36, 40),
         framestack = 3,
         stack_oldest_only = False, # maybe True could speed up.
-        map_history_length = 10,
-        flag_history_length = 10,
+        map_history_length = 2,
+        flag_history_length = 3,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
         reward_scales = dict(seen_pokemons=0, experience=0, badges=0, events=0,  exploration=10),
@@ -54,8 +54,8 @@ def cfg():
     model_class = 'SimpleModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 256
-    max_seq_len = 256 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    trajectory_length = 64
+    max_seq_len = 64 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 1024 * num_workers
     n_epochs=3
     minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.

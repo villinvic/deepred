@@ -132,7 +132,8 @@ class SimpleModel(BaseModel):
 
         concat = tf.concat([
             additional_ram_info,
-            #maps_embed, map_features_embed, screen_embed
+            maps_embed,
+            #map_features_embed, screen_embed
         ], axis=-1)
         return self.final_mlp(concat)
 
@@ -182,8 +183,9 @@ class SimpleModel(BaseModel):
 
         additional_ram_info = obs["ram"]
 
-        concat = tf.concat([additional_ram_info
-                            #maps_embed, map_features_embed, screen_embed
+        concat = tf.concat([additional_ram_info,
+                            maps_embed,
+                            #map_features_embed, screen_embed
                             ], axis=-1)
         return self.final_mlp(concat)
 
