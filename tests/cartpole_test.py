@@ -50,7 +50,8 @@ def cfg():
         'grad_clip': 20.,
         'ppo_clip': 0.3, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
-        'initial_kl_coeff': 0.,
+        'initial_kl_coeff': 1.,
+        'kl_target': 10.,
         "vf_clip": 1000.
         }
 
