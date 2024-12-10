@@ -27,8 +27,8 @@ def cfg():
     model_class = 'CartPoleModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 64
-    max_seq_len = 32 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    trajectory_length = 16
+    max_seq_len = 16 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 64 * num_workers
     n_epochs= 6
     minibatch_size = 128 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
