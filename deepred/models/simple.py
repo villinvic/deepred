@@ -127,12 +127,12 @@ class SimpleModel(BaseModel):
         maps = tf.expand_dims(self.maps_embedding(tf.cast(obs['map_ids'], tf.int64)), axis=0)
         maps_embed = tf.reduce_max(maps, axis=-2)
 
-        additional_ram_info = tf.expand_dims(obs["ram"], axis=0)
+        additional_ram_info = tf.expand_dims(tf.expand_dims(obs["ram"], axis=0), axis=0)
 
 
         concat = tf.concat([
             additional_ram_info,
-            maps_embed,
+            #maps_embed,
             #map_features_embed, screen_embed
         ], axis=-1)
         return self.final_mlp(concat)
@@ -184,7 +184,7 @@ class SimpleModel(BaseModel):
         additional_ram_info = obs["ram"]
 
         concat = tf.concat([additional_ram_info,
-                            maps_embed,
+                            #maps_embed,
                             #map_features_embed, screen_embed
                             ], axis=-1)
         return self.final_mlp(concat)

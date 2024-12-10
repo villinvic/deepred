@@ -120,7 +120,7 @@ def main(_config):
         project="deepred",
         mode='online',
         group="debug",
-        name="train_simple",
+        name="train_simple_victor",
         notes=None,
         dir=config["wandb_logdir"]
     )
