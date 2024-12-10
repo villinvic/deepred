@@ -30,7 +30,7 @@ def cfg():
     trajectory_length = 32
     max_seq_len = 32 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 1024 * num_workers
-    n_epochs=16
+    n_epochs=6
     minibatch_size = 8192 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
@@ -42,14 +42,14 @@ def cfg():
 
     default_policy_config = {
 
-        'discount': 0.98,  # rewards are x0,129 after 2048 steps.
-        'gae_lambda': 1., # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 1e-5, # encourages exploration
-        'lr': 1e-3, #5e-4
+        'discount': 0.99,  # rewards are x0,129 after 2048 steps.
+        'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
+        'entropy_cost': 0., # encourages exploration
+        'lr': 3e-4, #5e-4
 
         'grad_clip': 100.,
         'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
-        'baseline_coeff': 1.,
+        'baseline_coeff': 0.01,
         'initial_kl_coeff': 0.,
         "vf_clip": 100.
         }
