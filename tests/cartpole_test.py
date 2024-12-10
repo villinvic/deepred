@@ -51,7 +51,7 @@ def cfg():
         'ppo_clip': 0.3, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
         'initial_kl_coeff': 0.,
-        "vf_clip": 20.
+        "vf_clip": 1000.
         }
 
     policy_params = [{
