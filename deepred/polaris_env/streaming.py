@@ -4,9 +4,13 @@ import json
 from deepred.polaris_env.gamestate import GameState
 
 class BotStreamer:
-    def __init__(self, console_id: int = 0):
+    def __init__(
+            self,
+            console_id: int = 0,
+            bot_name: str = "deepred"
+    ):
         self.stream_metadata = {
-            "user": f"deepred",
+            "user": bot_name,
             "env_id": console_id,
             "color": "#a30000",
             "extra": "",

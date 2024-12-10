@@ -56,40 +56,23 @@ class SimpleModel(BaseModel):
 
         self.screen_conv_layers = [
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
-            for num_ch, kernel_size, stride, padding in [(64, 8, 4, padder), (128, 4, 2, padder2), (128, 3, 1, "VALID")]
+            for num_ch, kernel_size, stride, padding in [(32, 8, 4, padder), (64, 4, 2, padder2), (64, 3, 1, "VALID")]
         ]
         self.screen_conv_max_pool = tf.keras.layers.MaxPooling2D((3, 1), strides=(3, 1))
 
         self.map_features_conv_layers = [
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
-            for num_ch, kernel_size, stride, padding in [(64, 4, 1, "VALID"), (128, 4, 1, "VALID"), (256, 3, 1, "VALID")]
+            for num_ch, kernel_size, stride, padding in [(32, 4, 1, "VALID"), (64, 4, 1, "VALID"), (64, 3, 1, "VALID")]
         ]
 
         self.screen_embedding = snt.nets.MLP([256], activate_final=True)
         self.map_features_embedding = snt.nets.MLP([256], activate_final=True)
-
-        self.pokemons_mlp = snt.nets.MLP([64, 64], activate_final=True)
-        self.party_head_embedding = snt.nets.MLP([64, 64], activate_final=True)
-        self.opp_head_embedding = snt.nets.MLP([64, 64], activate_final=True)
-        self.party_head_max_pool = AdaptiveMaxPooling2D((1, 64), channels_last=False)
-        self.opp_head_max_pool = AdaptiveMaxPooling2D((1, 64), channels_last=False)
-
-        self.items_mlp = snt.nets.MLP([32, 32], activate_final=True)
-        self.items_max_pool = AdaptiveMaxPooling2D((1, 32), channels_last=False)
-
-        self.events_mlp = snt.nets.MLP([64, 64], activate_final=True)
-        self.events_max_pool = AdaptiveMaxPooling2D((1, 64), channels_last=False)
 
         self.maps_mlp = snt.nets.MLP([32, 32], activate_final=True)
         self.maps_max_pool = AdaptiveMaxPooling2D((1, 32), channels_last=False)
 
         self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True)
         self.warps_embedding = snt.Embed(len(NamedWarpIds), 8, densify_gradients=True)
-        self.moves_embedding = snt.Embed(len(Move), 8, densify_gradients=True)
-        self.types_embedding = snt.Embed(17, 8, densify_gradients=True)
-        # no pokemon id embedding
-        self.items_embedding = snt.Embed(len(BagItem), 32, densify_gradients=True)
-        self.events_embedding = snt.Embed(len(ProgressionFlag), 64, densify_gradients=True)
         self.maps_embedding = snt.Embed(len(Map), 32, densify_gradients=True)
 
         self.final_mlp = snt.nets.MLP([256], activate_final=True)

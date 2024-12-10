@@ -32,7 +32,7 @@ def cfg():
         flag_history_length = 10,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=0, experience=0, badges=0, events=0,  exploration=1),
+        reward_scales = dict(seen_pokemons=0, experience=0, badges=0, events=0,  exploration=10),
         reward_laziness_check_freq = 2048*4,
         reward_laziness_limit = 2048*2,
         savestate = "faster_red_post_parcel_pokeballs.state",
@@ -40,7 +40,9 @@ def cfg():
         record = False,
         speed_limit = 1,
         record_skipped_frame = False,
-        render = False
+        render = False,
+        stream = True,
+        bot_name= "deepred_s"
     )
 
     env = PolarisRed.env_id
@@ -54,7 +56,7 @@ def cfg():
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 256
     max_seq_len = 256 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 256 * num_workers
+    train_batch_size = 1024 * num_workers
     n_epochs=3
     minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10

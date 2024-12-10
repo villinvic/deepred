@@ -59,6 +59,7 @@ class PolarisRed(PolarisEnv):
             speed_limit: int = 1,
             record_skipped_frame: bool= False,
             stream: bool = True,
+            bot_name: str = "deepred",
             ** config
     ):
         super().__init__(env_index, **config)
@@ -110,7 +111,7 @@ class PolarisRed(PolarisEnv):
 
         self.stream = stream
         if stream:
-            self.streamer = BotStreamer(self.env_index)
+            self.streamer = BotStreamer(self.env_index, bot_name=bot_name)
 
         self.metrics : Union[PolarisRedMetrics, None] = None
         self.reward_scales = reward_scales
