@@ -34,6 +34,7 @@ class BotStreamer:
         while True:
             message = await self.queue.get()
             await self.broadcast_ws_message(message)
+            print(message)
 
     def send(self, gamestate: GameState):
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])
