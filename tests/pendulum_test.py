@@ -15,10 +15,6 @@ ex = Experiment(exp_name)
 
 @ex.config
 def cfg():
-    game_path = ''
-
-    if game_path == '':
-        raise ValueError("Need a path for the game rom.")
 
     env_config = dict()
 
@@ -76,6 +72,8 @@ def cfg():
         stopping_condition={"environment_steps": 1e10},
         keep=4,
     )
+
+    episode_callback_class = Callbacks
 
     restore = False
 
