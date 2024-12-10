@@ -68,7 +68,7 @@ class CartPoleModel(BaseModel):
             state
     ):
 
-        return self.final_mlp(tf.expand_dims(obs))
+        return self.final_mlp(tf.expand_dims(obs, axis=0))
 
     def batch_input(
             self,
