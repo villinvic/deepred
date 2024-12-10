@@ -127,7 +127,13 @@ class SimpleModel(BaseModel):
         maps = tf.expand_dims(self.maps_embedding(tf.cast(obs['map_ids'], tf.int64)), axis=0)
         maps_embed = tf.reduce_max(maps, axis=-2)
 
-        concat = tf.concat([maps_embed, map_features_embed, screen_embed], axis=-1)
+        additional_ram_info = tf.expand_dims(obs["ram"], axis=0)
+
+
+        concat = tf.concat([
+            additional_ram_info,
+            #maps_embed, map_features_embed, screen_embed
+        ], axis=-1)
         return self.final_mlp(concat)
 
     def batch_input(
@@ -174,10 +180,11 @@ class SimpleModel(BaseModel):
         #map_features = self.map_ids_fc_relu(map_concat)  # (20, 16)
         #map_features = self.map_ids_max_pool(map_features).squeeze(-2)  # (20, 16) -> (16, )
 
-        # Raw vector
-        #additional_ram_info = obs["ram"]
+        additional_ram_info = obs["ram"]
 
-        concat = tf.concat([maps_embed, map_features_embed, screen_embed], axis=-1)
+        concat = tf.concat([additional_ram_info
+                            #maps_embed, map_features_embed, screen_embed
+                            ], axis=-1)
         return self.final_mlp(concat)
 
 

@@ -1,7 +1,10 @@
 import asyncio
+import time
+
 import websockets
 import json
 from deepred.polaris_env.gamestate import GameState
+from asyncio import Queue
 
 class BotStreamer:
     def __init__(
@@ -19,27 +22,30 @@ class BotStreamer:
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.websocket = None
-        self.loop.run_until_complete(
-            self.establish_wc_connection()
-        )
-        self.upload_interval = 512
-        self.stream_step_counter = 0
         self.coord_list = []
+
+        self.queue = Queue()
+        self.loop.create_task(self.process_queue())
+
+        self.stream_step_counter = 0
+        self.upload_interval = 256
+
+    async def process_queue(self):
+        while True:
+            message = await self.queue.get()
+            await self.broadcast_ws_message(message)
 
     def send(self, gamestate: GameState):
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])
 
         if self.stream_step_counter >= self.upload_interval:
-            self.loop.run_until_complete(
-                self.broadcast_ws_message(
-                    json.dumps(
-                        {
-                          "metadata": self.stream_metadata,
-                          "coords": self.coord_list
-                        }
-                    )
-                )
+            message = json.dumps(
+                {
+                    "metadata": self.stream_metadata,
+                    "coords": self.coord_list,
+                }
             )
+            self.queue.put_nowait(message)
             self.stream_step_counter = 0
             self.coord_list = []
 
@@ -51,7 +57,7 @@ class BotStreamer:
         if self.websocket is not None:
             try:
                 await self.websocket.send(message)
-            except websockets.exceptions.WebSocketException as e:
+            except websockets.exceptions.WebSocketException:
                 self.websocket = None
 
     async def establish_wc_connection(self):
