@@ -44,7 +44,7 @@ def cfg():
 
         'discount': 0.99,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 1., # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 0.05, # encourages exploration
+        'entropy_cost': 0., # encourages exploration
         'lr': 3e-4, #5e-4
 
         'grad_clip': 100.,
