@@ -28,7 +28,7 @@ class BotStreamer:
         self.loop.create_task(self.process_queue())
 
         self.stream_step_counter = 0
-        self.upload_interval = 256
+        self.upload_interval = 128
 
     async def process_queue(self):
         while True:
@@ -40,6 +40,7 @@ class BotStreamer:
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])
 
         if self.stream_step_counter >= self.upload_interval:
+            print("here")
             message = json.dumps(
                 {
                     "metadata": self.stream_metadata,
