@@ -26,12 +26,12 @@ class BotStreamer:
 
         self.queue = Queue()
         self.loop.create_task(self.process_queue())
-        self.loop.run_forever()
 
         self.stream_step_counter = 0
         self.upload_interval = 128
 
     async def process_queue(self):
+        print("HERE")
         while True:
             message = await self.queue.get()
             await self.broadcast_ws_message(message)
