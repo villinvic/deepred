@@ -133,7 +133,7 @@ class CartPoleModel(BaseModel):
             state
         )
         policy_logits = self.policy_head(final_embeddings)
-        self._values = self.value_head(final_embeddings)
+        self._values = tf.squeeze(self.value_head(final_embeddings))
         return policy_logits, self._values
 
     def critic_loss(
