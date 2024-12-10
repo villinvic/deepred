@@ -113,12 +113,12 @@ class PolarisRedRewardFunction:
         if event_count > self.episode_max_event_count:
             self.episode_max_event_count = event_count
 
+        # TODO this is for debug
+        self.total_exploration = max([self.total_exploration, gamestate.pos_y])
         map_event_flag_hash = hash_function((gamestate.map, gamestate.event_flags))
-
-        if map_event_flag_hash not in self.visited_hash:
-            # TODO this is for debug
-            self.total_exploration += gamestate.pos_x #self.count_based_exploration_scales[map_event_flag_hash]
-            self.visited_hash.add(map_event_flag_hash)
+        # if map_event_flag_hash not in self.visited_hash:
+        #     self.total_exploration += self.count_based_exploration_scales[map_event_flag_hash]
+        #     self.visited_hash.add(map_event_flag_hash)
 
         return Goals(
             seen_pokemons=seen_pokemons,

@@ -32,7 +32,7 @@ def cfg():
         flag_history_length = 3,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=0, experience=0, badges=0, events=0,  exploration=10),
+        reward_scales = dict(seen_pokemons=0, experience=0, badges=0, events=0,  exploration=1),
         reward_laziness_check_freq = 2048*4,
         reward_laziness_limit = 2048*2,
         savestate = "faster_red_post_parcel_pokeballs.state",
