@@ -69,7 +69,7 @@ def cfg():
 
     default_policy_config = {
 
-        'discount': 0.999,  # rewards are x0,129 after 2048 steps.
+        'discount': 0.99,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
         'entropy_cost': 1e-5, # encourages exploration
         'lr': 5e-4, #5e-4
