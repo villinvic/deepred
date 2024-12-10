@@ -794,7 +794,7 @@ class GameState:
         # 2 elements
         map_w, map_h = MapDimensions[self.map].shape
 
-        return self.pos_x / map_w, self.pos_y / map_h
+        return self.pos_x / map_h, self.pos_y / map_w
 
 
     @cproperty

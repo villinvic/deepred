@@ -232,66 +232,66 @@ class PolarisRedObservationSpace:
 
         # TODO: allow auto inference of dimensions, rather than passing len of ...
         base_ram_observations = dict(
-            badges=RamObservation(
-                extractor=lambda gamestate: gamestate.badges,
-                nature=ObsType.BINARY,
-                size=8
-            ),
-            money=RamObservation(
-                extractor=lambda gamestate: gamestate.player_money,
-                nature=ObsType.CONTINUOUS,
-                scale=2e-4,
-                domain=(0., 30_000.)
-            ),
-            current_checkpoint=RamObservation(
-                extractor=lambda gamestate: gamestate.current_checkpoint,
-                nature=ObsType.CATEGORICAL,
-                domain=(0,len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids)),
-            ),
-            visited_pokecenters=RamObservation(
-                extractor=lambda gamestate: gamestate.visited_pokemon_centers,
-                nature=ObsType.BINARY,
-                size=len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids),
-            ),
-            field_moves=RamObservation(
-                extractor=lambda gamestate: gamestate.field_moves,
-                nature=ObsType.BINARY,
-                size=len(dummy_gamestate.field_moves),
-            ),
-            have_hms=RamObservation(
-                extractor=lambda gamestate: gamestate.hms,
-                nature=ObsType.BINARY,
-                size=len(dummy_gamestate.hms),
-            ),
-            battle_type=RamObservation(
-                extractor=lambda gamestate: gamestate.battle_type,
-                nature=ObsType.CATEGORICAL,
-                domain=(0, 3),
-            ),
-            party_count=RamObservation(
-                extractor=lambda gamestate: gamestate.party_count,
-                nature=ObsType.CONTINUOUS,
-                scale=1/6,
-                domain=(1/6, 1.)
-            ),
-            party_full=RamObservation(
-                extractor=lambda gamestate: int(gamestate.party_count == 6),
-                nature=ObsType.BINARY,
-            ),
-            better_pokemon_in_box=RamObservation(
-                extractor=lambda gamestate: gamestate.has_better_pokemon_in_box,
-                nature=ObsType.BINARY,
-            ),
-            bag_full=RamObservation(
-                extractor=lambda gamestate: gamestate.bag_count == 20,
-                nature=ObsType.BINARY
-            ),
-            bag_count=RamObservation(
-                extractor=lambda gamestate: gamestate.bag_count,
-                nature=ObsType.CONTINUOUS,
-                scale=1/20,
-                domain=(0., 20.),
-            ),
+            # badges=RamObservation(
+            #     extractor=lambda gamestate: gamestate.badges,
+            #     nature=ObsType.BINARY,
+            #     size=8
+            # ),
+            # money=RamObservation(
+            #     extractor=lambda gamestate: gamestate.player_money,
+            #     nature=ObsType.CONTINUOUS,
+            #     scale=2e-4,
+            #     domain=(0., 30_000.)
+            # ),
+            # current_checkpoint=RamObservation(
+            #     extractor=lambda gamestate: gamestate.current_checkpoint,
+            #     nature=ObsType.CATEGORICAL,
+            #     domain=(0,len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids)),
+            # ),
+            # visited_pokecenters=RamObservation(
+            #     extractor=lambda gamestate: gamestate.visited_pokemon_centers,
+            #     nature=ObsType.BINARY,
+            #     size=len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids),
+            # ),
+            # field_moves=RamObservation(
+            #     extractor=lambda gamestate: gamestate.field_moves,
+            #     nature=ObsType.BINARY,
+            #     size=len(dummy_gamestate.field_moves),
+            # ),
+            # have_hms=RamObservation(
+            #     extractor=lambda gamestate: gamestate.hms,
+            #     nature=ObsType.BINARY,
+            #     size=len(dummy_gamestate.hms),
+            # ),
+            # battle_type=RamObservation(
+            #     extractor=lambda gamestate: gamestate.battle_type,
+            #     nature=ObsType.CATEGORICAL,
+            #     domain=(0, 3),
+            # ),
+            # party_count=RamObservation(
+            #     extractor=lambda gamestate: gamestate.party_count,
+            #     nature=ObsType.CONTINUOUS,
+            #     scale=1/6,
+            #     domain=(1/6, 1.)
+            # ),
+            # party_full=RamObservation(
+            #     extractor=lambda gamestate: int(gamestate.party_count == 6),
+            #     nature=ObsType.BINARY,
+            # ),
+            # better_pokemon_in_box=RamObservation(
+            #     extractor=lambda gamestate: gamestate.has_better_pokemon_in_box,
+            #     nature=ObsType.BINARY,
+            # ),
+            # bag_full=RamObservation(
+            #     extractor=lambda gamestate: gamestate.bag_count == 20,
+            #     nature=ObsType.BINARY
+            # ),
+            # bag_count=RamObservation(
+            #     extractor=lambda gamestate: gamestate.bag_count,
+            #     nature=ObsType.CONTINUOUS,
+            #     scale=1/20,
+            #     domain=(0., 20.),
+            # ),
             coordinates=RamObservation(
                 extractor=lambda gamestate: gamestate.scaled_coordinates,
                 nature=ObsType.CONTINUOUS,

@@ -75,7 +75,7 @@ class SimpleModel(BaseModel):
         self.warps_embedding = snt.Embed(len(NamedWarpIds), 8, densify_gradients=True)
         self.maps_embedding = snt.Embed(len(Map), 32, densify_gradients=True)
 
-        self.final_mlp = snt.nets.MLP([256], activate_final=True)
+        self.final_mlp = snt.nets.MLP([32], activate_final=True)
         self.policy_head = snt.Linear(self.action_space.n)
         self._value_logits = None
         self.value_head = snt.Linear(1)

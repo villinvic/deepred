@@ -18,7 +18,7 @@ def run(
      flag_history_length: int = 10,
      enabled_patches: Tuple[str] = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                                     "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-     reward_scales: dict = dict(seen_pokemons=0.1, experience=2, badges=5),
+     reward_scales: dict = dict(exploration=1),
      savestate: str | None = "faster_red_post_parcel_pokeballs.state",
      session_path: str = "red_tests",
      record: bool = False,

@@ -1,29 +1,17 @@
-import time
-from functools import partial
-from typing import List, Union, SupportsFloat, Dict, Optional, Tuple
 
-import cv2
-from collections import defaultdict
-import json
+from typing import Union, Dict, Optional, Tuple
+
+
 from pathlib import Path
 
-import plotly
-import matplotlib.pyplot as plt
-import numpy as np
 from polaris.environments import PolarisEnv
-from pyboy import PyBoy
 from pyboy.utils import WindowEvent
 
-import mediapy
-
-from gymnasium import spaces
-
 from deepred.polaris_env.action_space import PolarisRedActionSpace, CustomEvent
-from deepred.polaris_env.pokemon_red.enums import *
 from deepred.polaris_env.gb_console import GBConsole
 from deepred.polaris_env.metrics import PolarisRedMetrics
 from deepred.polaris_env.observation_space import PolarisRedObservationSpace
-from deepred.polaris_env.rewards import PolarisRedRewardFunction, Goals
+from deepred.polaris_env.rewards import PolarisRedRewardFunction
 from deepred.polaris_env.streaming import BotStreamer
 
 
