@@ -48,50 +48,45 @@ class BoeysBaselineModel(BaseModel):
 
         self.conv_activation = config.get("conv_activation", tf.nn.relu)
 
-        def padder(integer):
-            return [2, 0]
-
-        def padder2(integer):
-            return [2, 2]
 
         self.screen_conv_layers = [
-            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
-            for num_ch, kernel_size, stride, padding in [(64, 8, 4, padder), (128, 4, 2, padder2), (128, 3, 1, "VALID")]
+            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"screen{kernel_size}")
+            for num_ch, kernel_size, stride, padding in [(32, 8, 4, "VALID"), (64, 4, 2, "VALID"), (64, 3, 1, "VALID")]
         ]
         self.screen_conv_max_pool = tf.keras.layers.MaxPooling2D((3, 1), strides=(3, 1))
 
         self.map_features_conv_layers = [
-            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
-            for num_ch, kernel_size, stride, padding in [(64, 4, 1, "VALID"), (128, 4, 1, "VALID"), (256, 3, 1, "VALID")]
+            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"map{kernel_size}")
+            for num_ch, kernel_size, stride, padding in [(32, 4, 1, "VALID"), (64, 4, 1, "VALID"), (128, 3, 1, "VALID")]
         ]
 
-        self.screen_embedding = snt.nets.MLP([512], activate_final=True)
-        self.map_features_embedding = snt.nets.MLP([512], activate_final=True)
-        self.moves_mlp = snt.nets.MLP([8, 8], activate_final=True)
+        self.screen_embedding = snt.nets.MLP([256], activate_final=True, name="screen_embedding")
+        self.map_features_embedding = snt.nets.MLP([256], activate_final=True, name="map_features_embedding")
+        self.moves_mlp = snt.nets.MLP([8, 8], activate_final=True, name="moves_mlp")
 
-        self.pokemons_mlp = snt.nets.MLP([64, 64], activate_final=True)
-        self.party_head_embedding = snt.nets.MLP([64, 64], activate_final=True)
-        self.opp_head_embedding = snt.nets.MLP([64, 64], activate_final=True)
+        self.pokemons_mlp = snt.nets.MLP([64, 64], activate_final=True, name="pokemons_mlp")
+        self.party_head_embedding = snt.nets.MLP([64, 64], activate_final=True, name="party_head_embedding")
+        self.opp_head_embedding = snt.nets.MLP([64, 64], activate_final=True, name="opp_head_embedding")
 
-        self.items_mlp = snt.nets.MLP([32, 32], activate_final=True)
+        self.items_mlp = snt.nets.MLP([32, 32], activate_final=True, name="items_mlp")
 
-        self.events_mlp = snt.nets.MLP([64, 64], activate_final=True)
+        self.events_mlp = snt.nets.MLP([64, 64], activate_final=True, name="events_mlp")
 
-        self.maps_mlp = snt.nets.MLP([32, 32], activate_final=True)
+        self.maps_mlp = snt.nets.MLP([32, 32], activate_final=True, name="maps_mlp")
 
-        self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True)
-        self.warps_embedding = snt.Embed(len(NamedWarpIds), 8, densify_gradients=True)
-        self.moves_embedding = snt.Embed(len(Move), 8, densify_gradients=True)
-        self.types_embedding = snt.Embed(17, 8, densify_gradients=True)
+        self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True, name="sprite_embedding")
+        self.warps_embedding = snt.Embed(len(NamedWarpIds)+1, 8, densify_gradients=True, name="warps_embedding")
+        self.moves_embedding = snt.Embed(len(Move) + 1, 8, densify_gradients=True, name="moves_embedding")
+        self.types_embedding = snt.Embed(17, 8, densify_gradients=True, name="types_embedding")
         # no pokemon id embedding
-        self.items_embedding = snt.Embed(len(BagItem), 32, densify_gradients=True)
-        self.events_embedding = snt.Embed(len(ProgressionFlag), 64, densify_gradients=True)
-        self.maps_embedding = snt.Embed(len(Map), 32, densify_gradients=True)
+        self.items_embedding = snt.Embed(256, 32, densify_gradients=True, name="bag_items_embedding")
+        self.events_embedding = snt.Embed(len(ProgressionFlag)+1, 64, densify_gradients=True, name="event_embedding")
+        self.maps_embedding = snt.Embed(len(Map)+1, 32, densify_gradients=True, name="maps_embedding")
 
-        self.final_mlp = snt.nets.MLP([1024, 1024], activate_final=True)
-        self.policy_head = snt.Linear(self.action_space.n)
+        self.final_mlp = snt.nets.MLP([256], activate_final=True, name="final_mlp")
+        self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
         self._value_logits = None
-        self.value_head = snt.Linear(1)
+        self.value_head = snt.Linear(1, name="value_head")
 
         # num_value_bins = config.get("num_value_bins", [256])
         # value_bounds = config.get("value_bounds", (-5., 5.))
@@ -117,7 +112,7 @@ class BoeysBaselineModel(BaseModel):
 
         conv_out = self.screen_conv_layers[0](pixels)
         conv_out = self.conv_activation(conv_out)
-        conv_out = self.screen_conv_max_pool(conv_out)
+        #conv_out = self.screen_conv_max_pool(conv_out)
         for conv in self.screen_conv_layers[1:]:
             conv_out = conv(conv_out)
             conv_out = self.conv_activation(conv_out)
@@ -152,7 +147,7 @@ class BoeysBaselineModel(BaseModel):
         party_head_embed = self.party_head_embedding(party_pokemon_embed)
         party_head_embed = tf.reduce_max(party_head_embed, axis=-2)
 
-        opp_pokemon_embed = pokemons_embed[..., 6:, :]
+        opp_pokemon_embed = pokemons_embed[:, 6:, :]
         poke_opp_head = self.opp_head_embedding(opp_pokemon_embed)
         poke_opp_head = tf.reduce_max(poke_opp_head, axis=-2)
 
@@ -170,14 +165,19 @@ class BoeysBaselineModel(BaseModel):
 
         maps = tf.expand_dims(self.maps_embedding(tf.cast(obs['map_ids'], tf.int64)), axis=0)
         maps_embed = tf.reduce_max(maps, axis=-2)
+
         #map_features = self.map_ids_fc_relu(map_concat)
         #map_features = self.map_ids_max_pool(map_features).squeeze(-2)
 
-        # Raw vector
         additional_ram_info = tf.expand_dims(obs["ram"], axis=0)
 
-        concat = tf.concat([additional_ram_info, maps_embed, events_embed, items_embed, poke_opp_head,
-                            party_head_embed, map_features_embed, screen_embed], axis=-1)
+        concat = tf.concat([
+            #additional_ram_info,
+            #maps_embed,
+            #events_embed, items_embed, poke_opp_head, party_head_embed,
+            #map_features_embed
+            screen_embed
+        ], axis=-1)
         return self.final_mlp(concat)
 
     def batch_input(
@@ -194,7 +194,7 @@ class BoeysBaselineModel(BaseModel):
         pixels = tf.reshape(pixels, tf.concat([[-1], shape[2:]], axis=0))
         conv_out = self.screen_conv_layers[0](pixels)
         conv_out = self.conv_activation(conv_out)
-        conv_out = self.screen_conv_max_pool(conv_out)
+        #conv_out = self.screen_conv_max_pool(conv_out)
         for conv in self.screen_conv_layers[1:]:
             conv_out = conv(conv_out)
             conv_out = self.conv_activation(conv_out)
@@ -253,14 +253,20 @@ class BoeysBaselineModel(BaseModel):
 
         maps = self.maps_embedding(tf.cast(obs['map_ids'], tf.int64))
         maps_embed = tf.reduce_max(maps, axis=-2)
+
         #map_features = self.map_ids_fc_relu(map_concat)  # (20, 16)
         #map_features = self.map_ids_max_pool(map_features).squeeze(-2)  # (20, 16) -> (16, )
 
-        # Raw vector
         additional_ram_info = obs["ram"]
 
-        concat = tf.concat([additional_ram_info, maps_embed, events_embed, items_embed, poke_opp_head,
-                            party_head_embed, map_features_embed, screen_embed], axis=-1)
+        concat = tf.concat([
+            #additional_ram_info,
+             #               maps_embed,
+             #               events_embed, items_embed, poke_opp_head,
+              #              party_head_embed,
+                            #map_features_embed,
+                         screen_embed
+                            ], axis=-1)
         return self.final_mlp(concat)
 
 

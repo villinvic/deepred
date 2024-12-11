@@ -167,7 +167,7 @@ class PolarisRed(PolarisEnv):
         )
         self.metrics.update(gamestate)
         reward = self.reward_function.compute_step_rewards(gamestate)
-        if reward == 0:
+        if reward <= 0:
             self.reward_laziness += 1
         else:
             self.reward_laziness = 0

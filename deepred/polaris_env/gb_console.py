@@ -189,7 +189,7 @@ class GBConsole(PyBoy):
                 or
                     self._gamestate.is_in_battle and not gamestate.is_in_battle # battle transition screen
             ):
-                frames_to_skip += 33
+                frames_to_skip += 38
 
             self._gamestate = gamestate
             if self._gamestate.is_skippable_frame():

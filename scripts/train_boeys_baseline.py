@@ -21,26 +21,28 @@ def cfg():
 
     env_config = dict(
         game_path = game_path,
-        episode_length = 2048 * 64,# 1024 * 1000 * 30, # 2048 is short, for debugging purposes.
+        episode_length = 2048,# 1024 * 1000 * 30, # 2048 is short, for debugging purposes.
         enable_start = False,
         enable_roll_party = True,
         enable_pass = False,
         downscaled_screen_shape = (36, 40),
         framestack = 3,
         stack_oldest_only = False, # maybe True could speed up.
-        map_history_length = 10,
-        flag_history_length = 10,
+        map_history_length = 5,
+        flag_history_length = 5,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=1, experience=10, badges=100, events=5,  exploration=0),
+        reward_scales = dict(seen_pokemons=0, experience=0, badges=0, events=0,  blackout=0, exploration=1),
         reward_laziness_check_freq = 2048*4,
-        reward_laziness_limit = 2048*2,
+        reward_laziness_limit = 2048*4,
         savestate = "faster_red_post_parcel_pokeballs.state",
         session_path = "red_tests",
         record = False,
-        speed_limit = 1,
+        speed_limit = 2,
         record_skipped_frame = False,
-        render = False
+        render = False,
+        stream = True,
+        bot_name = "deepred_b"
     )
 
     env = PolarisRed.env_id
@@ -52,11 +54,11 @@ def cfg():
     model_class = 'BoeysBaselineModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 1024
-    max_seq_len = 128 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    trajectory_length = 2048
+    max_seq_len = 2048 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 2048 * num_workers
-    n_epochs=3
-    minibatch_size = 1024 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    n_epochs=16
+    minibatch_size = train_batch_size // 8 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
@@ -67,16 +69,17 @@ def cfg():
 
     default_policy_config = {
 
-        'discount': 0.999,  # rewards are x0,129 after 2048 steps.
+        'discount': 0.997,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 1e-3, # encourages exploration
-        'lr': 3e-4, #5e-4
+        'entropy_cost': 1e-2, # encourages exploration
+        'lr': 5e-4, #5e-4
 
         'grad_clip': 0.5,
         'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
-        'initial_kl_coeff': 0.,
-        "vf_clip": 0.5
+        'initial_kl_coeff': 0.5,
+        'kl_target': 0.02,
+        "vf_clip": 10.
         }
 
     policy_params = [{
@@ -101,6 +104,8 @@ def cfg():
 
     restore = False
 
+    name = "train_boeys"
+
 @ex.automain
 def main(_config):
     import tensorflow as tf
@@ -118,7 +123,7 @@ def main(_config):
         project="deepred",
         mode='online',
         group="debug",
-        name="boeys_baseline",
+        name=config["name"],
         notes=None,
         dir=config["wandb_logdir"]
     )

@@ -31,8 +31,8 @@ class PolarisRedMetrics:
     ):
         if self._prev_gamestate is not None:
 
-            map_event_flag_hash = hash_function((gamestate.map, gamestate.event_flags))
-            self.visited_hash.add(map_event_flag_hash)
+            h = hash_function((gamestate.map, gamestate.pos_x // 3, gamestate.pos_y // 3))
+            self.visited_hash.add(h)
             self.visitated_maps.add(gamestate.map)
             total_items_delta = sum(gamestate.bag_items.values()) - sum(self._prev_gamestate.bag_items.values())
             if total_items_delta != 0 and gamestate.is_in_battle or gamestate.is_at_pokemart:

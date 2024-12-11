@@ -682,22 +682,22 @@ class GameState:
 
         return StartMenuItem.UNSELECTED
 
-    # @cproperty
-    # def party_hp(self) -> List[float]:
-    #     """
-    #     The current party pokemon health fractions (0 is fainted, 1 is full hp).
-    #     """
-    #     return [ self._read_double(curr_hp_addr) / (self._read_double(max_hp_addr) + 1e-8)
-    #     # Addresses are not adjacent.
-    #     for curr_hp_addr, max_hp_addr in [
-    #                  (RamLocation.PARTY_0_HP, RamLocation.PARTY_0_MAXHP),
-    #                  (RamLocation.PARTY_1_HP, RamLocation.PARTY_1_MAXHP),
-    #                  (RamLocation.PARTY_2_HP, RamLocation.PARTY_2_MAXHP),
-    #                  (RamLocation.PARTY_3_HP, RamLocation.PARTY_3_MAXHP),
-    #                  (RamLocation.PARTY_4_HP, RamLocation.PARTY_4_MAXHP),
-    #                  (RamLocation.PARTY_5_HP, RamLocation.PARTY_5_MAXHP),
-    #              ]
-    #     ]
+    @cproperty
+    def party_hp(self) -> List[float]:
+        """
+        The current party pokemon health fractions (0 is fainted, 1 is full hp).
+        """
+        return [ self._read_double(curr_hp_addr) / (self._read_double(max_hp_addr) + 1e-6)
+        # Addresses are not adjacent.
+        for curr_hp_addr, max_hp_addr in [
+                     (RamLocation.PARTY_0_HP, RamLocation.PARTY_0_MAXHP),
+                     (RamLocation.PARTY_1_HP, RamLocation.PARTY_1_MAXHP),
+                     (RamLocation.PARTY_2_HP, RamLocation.PARTY_2_MAXHP),
+                     (RamLocation.PARTY_3_HP, RamLocation.PARTY_3_MAXHP),
+                     (RamLocation.PARTY_4_HP, RamLocation.PARTY_4_MAXHP),
+                     (RamLocation.PARTY_5_HP, RamLocation.PARTY_5_MAXHP),
+                 ]
+        ]
 
     @cproperty
     def party_experience(self) -> List[float]:

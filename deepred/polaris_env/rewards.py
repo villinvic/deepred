@@ -6,6 +6,7 @@ import tree
 from attr import dataclass
 
 from deepred.polaris_env.gamestate import GameState
+from deepred.polaris_env.pokemon_red.enums import Map
 from deepred.polaris_utils.counting import HashScales, hash_function
 
 
@@ -30,9 +31,9 @@ class Goals(NamedTuple):
     badges: float = 0
     experience: float = 0
     events: float = 0
+    blackout: float = 0
     # computed with map-(event flags) hash
     exploration: float = 0
-
 
 def _get_goals_delta(
         previous: Goals,
@@ -81,13 +82,14 @@ class PolarisRedRewardFunction:
         self.scales = Goals() if reward_scales is None else Goals(** reward_scales)
         self.delta_goals = Goals()
 
-        init_hash = hash_function((inital_gamestate.map, inital_gamestate.event_flags))
+        h = hash_function((inital_gamestate.map, inital_gamestate.pos_x // 3, inital_gamestate.pos_y // 3))
         self.total_exploration = 0
-        self.visited_hash = {init_hash}
+        self.visited_hash = {h}
 
         self._cumulated_rewards = Goals()
-        self._previous_goals = self._extract_goals(inital_gamestate)
+        self._previous_gamestate = inital_gamestate
         self.count_based_exploration_scales = count_based_exploration_scales
+        self._previous_goals = self._extract_goals(inital_gamestate)
 
     def _extract_goals(
             self,
@@ -113,19 +115,30 @@ class PolarisRedRewardFunction:
         if event_count > self.episode_max_event_count:
             self.episode_max_event_count = event_count
 
-        # TODO this is for debug
-        self.total_exploration = max([self.total_exploration, gamestate.pos_y])
-        map_event_flag_hash = hash_function((gamestate.map, gamestate.event_flags))
-        # if map_event_flag_hash not in self.visited_hash:
-        #     self.total_exploration += self.count_based_exploration_scales[map_event_flag_hash]
-        #     self.visited_hash.add(map_event_flag_hash)
+        self.total_exploration += int(gamestate.map == Map.REDS_HOUSE_2F) + 0.1 * int(gamestate.map == Map.REDS_HOUSE_1F)
+        # h = hash_function((gamestate.map, gamestate.pos_x // 3, gamestate.pos_y // 3))
+        # if (gamestate.map not in (Map.PALLET_TOWN, Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F)
+        #         and h not in self.visited_hash):
+        #     self.total_exploration += self.count_based_exploration_scales[h]
+        #     self.visited_hash.add(h)
 
+        blackout = int(
+            sum(self._previous_gamestate.party_hp) / self._previous_gamestate.party_count <
+            sum(gamestate.party_hp) / gamestate.party_count
+            and
+            self._previous_gamestate.map != gamestate.map
+            and
+            (gamestate.is_at_pokecenter or gamestate.map == Map.PALLET_TOWN)
+        )
+
+        self._previous_gamestate = gamestate
         return Goals(
             seen_pokemons=seen_pokemons,
             badges=badges,
             experience=self.episode_max_party_exp,
             events=self.episode_max_event_count,
-            exploration=self.total_exploration
+            exploration=self.total_exploration,
+            blackout=blackout
         )
 
     def _get_goal_updates(
@@ -146,11 +159,11 @@ class PolarisRedRewardFunction:
             badges=goal_updates.badges,
             experience=goal_updates.experience / self.episode_max_level**3,
             events=goal_updates.events,
-            exploration=goal_updates.exploration
+            exploration=goal_updates.exploration,
+            blackout=-np.maximum(0, goal_updates.blackout) # blackout_update = 1 when we blackout, -1 when we respawn.
         )
         self._cumulated_rewards = accumulate_goal_stats(rewards, self._cumulated_rewards)
         self._previous_goals = goals
-
         return _compute_step_reward(rewards, self.scales)
 
     def get_metrics(self) -> dict:

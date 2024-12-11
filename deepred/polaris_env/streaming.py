@@ -23,47 +23,47 @@ class BotStreamer:
         self.websocket = None
         self.coord_list = []
 
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.websocket = None
+        self.loop.run_until_complete(
+            self.establish_wc_connection()
+        )
+
         self.stream_step_counter = 0
-        self.upload_interval = 128
+        self.upload_interval = 512
 
     def send(self, gamestate: GameState):
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])
 
         if self.stream_step_counter >= self.upload_interval:
-            message = json.dumps(
-                {
-                    "metadata": self.stream_metadata,
-                    "coords": self.coord_list,
-                }
+            self.loop.run_until_complete(
+                self.broadcast_ws_message(
+                    json.dumps(
+                        {
+                            "metadata": self.stream_metadata,
+                            "coords": self.coord_list
+                        }
+                    )
+                )
             )
-            self.send_message(message)
-            print(f"sent message to {self.ws_address}")
             self.stream_step_counter = 0
             self.coord_list = []
 
         self.stream_step_counter += 1
 
 
-    def establish_connection(self):
-        asyncio.run(self._establish_connection())
-
-    def send_message(self, message):
-        asyncio.run(self._broadcast_message(message))
-
-    async def _broadcast_message(self, message):
+    async def broadcast_ws_message(self, message):
         if self.websocket is None:
-            await self._establish_connection()
+            await self.establish_wc_connection()
         if self.websocket is not None:
             try:
-                print("sending message.")
                 await self.websocket.send(message)
-                print("sent message.")
-            except websockets.exceptions.WebSocketException:
+            except websockets.exceptions.WebSocketException as e:
                 self.websocket = None
 
-    async def _establish_connection(self):
+    async def establish_wc_connection(self):
         try:
             self.websocket = await websockets.connect(self.ws_address)
-            print(f"connected to {self.ws_address}")
         except:
             self.websocket = None

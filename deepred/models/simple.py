@@ -48,34 +48,29 @@ class SimpleModel(BaseModel):
 
         self.conv_activation = config.get("conv_activation", tf.nn.relu)
 
-        def padder(integer):
-            return [2, 0]
-
-        def padder2(integer):
-            return [2, 2]
 
         self.screen_conv_layers = [
-            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
-            for num_ch, kernel_size, stride, padding in [(32, 8, 4, padder), (64, 4, 2, padder2), (64, 3, 1, "VALID")]
+            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"screen{kernel_size}")
+            for num_ch, kernel_size, stride, padding in [(32, 8, 4, "VALID"), (64, 4, 2, "VALID"), (64, 3, 1, "VALID")]
         ]
         self.screen_conv_max_pool = tf.keras.layers.MaxPooling2D((3, 1), strides=(3, 1))
 
         self.map_features_conv_layers = [
-            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding)
+            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"map{kernel_size}")
             for num_ch, kernel_size, stride, padding in [(32, 4, 1, "VALID"), (64, 4, 1, "VALID"), (64, 3, 1, "VALID")]
         ]
 
-        self.screen_embedding = snt.nets.MLP([256], activate_final=True)
-        self.map_features_embedding = snt.nets.MLP([256], activate_final=True)
+        self.screen_embedding = snt.nets.MLP([128], activate_final=True, name=f"screen_embed")
+        self.map_features_embedding = snt.nets.MLP([128], activate_final=True, name=f"screen_embed")
 
-        self.maps_mlp = snt.nets.MLP([32, 32], activate_final=True)
+        self.maps_mlp = snt.nets.MLP([32, 32], activate_final=True, name=f"maps_mlp")
         self.maps_max_pool = AdaptiveMaxPooling2D((1, 32), channels_last=False)
 
-        self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True)
-        self.warps_embedding = snt.Embed(len(NamedWarpIds), 8, densify_gradients=True)
-        self.maps_embedding = snt.Embed(len(Map), 32, densify_gradients=True)
+        self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True, name=f"sprites_embedding")
+        self.warps_embedding = snt.Embed(len(NamedWarpIds), 8, densify_gradients=True, name=f"warps_embedding")
+        self.maps_embedding = snt.Embed(len(Map) + 1, 32, densify_gradients=True, name="maps_embedding")
 
-        self.final_mlp = snt.nets.MLP([32], activate_final=True, name="final_mlp")
+        self.final_mlp = snt.nets.MLP([32,32], activate_final=True, name="final_mlp")
         self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
         self._value_logits = None
         self.value_head = snt.Linear(1, name="value_head")
@@ -127,13 +122,14 @@ class SimpleModel(BaseModel):
         maps = tf.expand_dims(self.maps_embedding(tf.cast(obs['map_ids'], tf.int64)), axis=0)
         maps_embed = tf.reduce_max(maps, axis=-2)
 
-        additional_ram_info = tf.expand_dims(tf.expand_dims(obs["ram"], axis=0), axis=0)
+        additional_ram_info = tf.expand_dims(obs["ram"], axis=0)
 
 
         concat = tf.concat([
             additional_ram_info,
-            #maps_embed,
-            #map_features_embed, screen_embed
+            # screen_embed,
+            # maps_embed,
+            # map_features_embed
         ], axis=-1)
         return self.final_mlp(concat)
 
@@ -183,9 +179,11 @@ class SimpleModel(BaseModel):
 
         additional_ram_info = obs["ram"]
 
-        concat = tf.concat([additional_ram_info,
-                            #maps_embed,
-                            #map_features_embed, screen_embed
+        concat = tf.concat([
+                            additional_ram_info,
+                            # screen_embed,
+                            # maps_embed,
+                            # map_features_embed
                             ], axis=-1)
         return self.final_mlp(concat)
 

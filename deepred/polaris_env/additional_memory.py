@@ -125,7 +125,7 @@ class MapHistory(AdditionalMemoryBlock):
             self,
             gamestate: "GameState"
     ):
-        if gamestate.map in self.map_history:
+        if gamestate.map == self.map_history[-1]:
             return
 
         self.map_history.pop(0)

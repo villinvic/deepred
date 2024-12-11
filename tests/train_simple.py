@@ -21,20 +21,20 @@ def cfg():
 
     env_config = dict(
         game_path = game_path,
-        episode_length = 256,# 1024 * 1000 * 30, # 2048 is short, for debugging purposes.
+        episode_length = 2048*32,# 1024 * 1000 * 30, # 2048 is short, for debugging purposes.
         enable_start = False,
-        enable_roll_party = False,
+        enable_roll_party = True,
         enable_pass = False,
         downscaled_screen_shape = (36, 40),
         framestack = 3,
         stack_oldest_only = False, # maybe True could speed up.
-        map_history_length = 2,
-        flag_history_length = 3,
+        map_history_length = 5,
+        flag_history_length = 5,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=0, experience=0, badges=0, events=0,  exploration=1),
-        reward_laziness_check_freq = 2048*4,
-        reward_laziness_limit = 2048*2,
+        reward_scales = dict(seen_pokemons=0, experience=5, badges=0, events=10,  exploration=0),
+        reward_laziness_check_freq = 2048,
+        reward_laziness_limit = 2048,
         savestate = "faster_red_post_parcel_pokeballs.state",
         session_path = "red_tests",
         record = False,
@@ -54,11 +54,11 @@ def cfg():
     model_class = 'SimpleModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 256
-    max_seq_len = 256 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 256 * num_workers
-    n_epochs=6
-    minibatch_size = train_batch_size//4 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    trajectory_length = 2048
+    max_seq_len = 2048 # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
+    train_batch_size = 2048 * (num_workers)
+    n_epochs=8
+    minibatch_size = train_batch_size // 32 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
@@ -69,17 +69,17 @@ def cfg():
 
     default_policy_config = {
 
-        'discount': 0.99,  # rewards are x0,129 after 2048 steps.
-        'gae_lambda': 1., # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 0.01, # encourages exploration
+        'discount': 0.997,  # rewards are x0,129 after 2048 steps.
+        'gae_lambda': 0.98, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
+        'entropy_cost': 0.0001, # encourages exploration
         'lr': 5e-4, #5e-4
 
         'grad_clip': 0.5,
-        'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
+        'ppo_clip': 0.8, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
         'initial_kl_coeff': 1.,
-        'kl_target': 0.01,
-        "vf_clip": 5.
+        'kl_target': 1.,
+        "vf_clip": 10.
         }
 
     policy_params = [{

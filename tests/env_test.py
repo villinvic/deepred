@@ -19,7 +19,7 @@ def run(
      enabled_patches: Tuple[str] = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                                     "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
      reward_scales: dict = dict(exploration=1),
-     savestate: str | None = "faster_red_post_parcel_pokeballs.state",
+     savestate: str | None = "save.state",
      session_path: str = "red_tests",
      record: bool = False,
      speed_limit: int = 1,
