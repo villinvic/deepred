@@ -167,16 +167,21 @@ class PolarisRed(PolarisEnv):
         )
         self.metrics.update(gamestate)
         reward = self.reward_function.compute_step_rewards(gamestate)
-        if reward <= 0:
+        # TODO: put in config
+        if reward <= 0.02:
             self.reward_laziness += 1
         else:
             self.reward_laziness = 0
+        early_termination =(
+                self.step_count % self.reward_laziness_check_freq == 0
+                and self.reward_laziness >= self.reward_laziness_limit)
+
+        if early_termination:
+            reward -= self.reward_scales["early_termination"]
 
         self.step_count += 1
         # stop if reached step limit, or if we are stuck somewhere.
-        done = self.step_count >= self.episode_length or (
-                self.step_count % self.reward_laziness_check_freq == 0
-                and self.reward_laziness >= self.reward_laziness_limit)
+        done = self.step_count >= self.episode_length
 
         dones = {
             "__all__": done,

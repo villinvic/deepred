@@ -5,18 +5,15 @@ import numpy as np
 
 from deepred.polaris_env.pokemon_red.enums import Pokemon
 from deepred.polaris_env.gamestate import GameState
-from deepred.polaris_utils.counting import hash_function
 
 
 class PolarisRedMetrics:
     def __init__(
             self
     ):
-
         self.metrics = defaultdict(float)
 
         # keeps track of how many steps we stay on each map-(event flags) pair
-        self.visited_hash = set()
         self.visitated_maps = set()
         self.items_bought_in_mart = 0
         self.items_used_in_battle = 0
@@ -31,8 +28,6 @@ class PolarisRedMetrics:
     ):
         if self._prev_gamestate is not None:
 
-            h = hash_function((gamestate.map, gamestate.pos_x // 3, gamestate.pos_y // 3))
-            self.visited_hash.add(h)
             self.visitated_maps.add(gamestate.map)
             total_items_delta = sum(gamestate.bag_items.values()) - sum(self._prev_gamestate.bag_items.values())
             if total_items_delta != 0 and gamestate.is_in_battle or gamestate.is_at_pokemart:
@@ -56,8 +51,6 @@ class PolarisRedMetrics:
                 pokemons[pokemon.name] += 1
 
         return {
-            "to_pop/visited_hash": self.visited_hash,
-            "num_visited_hash": len(self.visited_hash),
             "num_visited_maps": len(self.visitated_maps),
             #"visited_maps": self.visitated_maps, # sets are not supported as metrics.
             "items_used_in_battle": self.items_used_in_battle,

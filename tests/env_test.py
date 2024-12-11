@@ -3,7 +3,7 @@ from typing import Tuple
 from deepred.polaris_env.pokemon_red.enums import BagItem
 from deepred.polaris_env.polaris_red import PolarisRed
 from deepred.polaris_env.rewards import Goals
-from deepred.polaris_utils.counting import HashScales
+from deepred.polaris_utils.counting import HashCounts
 
 
 
@@ -45,7 +45,7 @@ def run(
         record_skipped_frame=record_skipped_frame
     ) for i in range(1)
     ]
-    options = {0: {"count_based_exploration_scales": HashScales({})}}
+    options = {0: {"count_based_exploration_scales": HashCounts({})}}
     for env in envs:
         env.reset(options=options)
     env0 = envs[0]

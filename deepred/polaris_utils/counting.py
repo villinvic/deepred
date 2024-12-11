@@ -42,34 +42,39 @@ class VisitationCounts:
         self.counts = defaultdict(int)
 
         self.inital_scale = config.count_based_initial_scale
-        self.scales = dict()
 
 
     def push_samples(
             self,
-            visited_hash: set
+            visited_hashes: dict
     ):
-        for h in visited_hash:
-            self.counts[h] += 1
-            self.scales[h] = 1/np.float_power(self.counts[h], self.decay_power)
+        for h, c in visited_hashes.items():
+            self.counts[h] += c
 
-    def get_scales(self) -> "HashScales":
-        return HashScales(scales=self.scales, inital_scale=self.inital_scale)
+    def get_scales(self) -> "HashCounts":
+        return HashCounts(counts=self.counts, inital_scale=self.inital_scale, decay_power=self.decay_power)
 
-class HashScales:
+class HashCounts:
     def __init__(
             self,
-            scales: dict,
+            counts: dict,
             inital_scale: int = 1,
+            decay_power: int = 1,
     ):
         """
         Convenience class to return a default scale if the hash is not in the registered hashes yet.
-        :param scales: scales for each registered hash
+        :param counts: counts for each registered hash
         :param inital_scale: initial scale for unregistered hashes
+        :param decay_power: speed at which count rewards decrease
         """
-        self.scales = scales
+        self.counts = counts
         self.inital_scale = inital_scale
+        self.decay_power = decay_power
+
+    def visit(self, hash):
+        self.counts[hash] += 1
 
     def __getitem__(self, item):
-        return self.scales.get(item, self.inital_scale)
-
+        if item not in self.counts:
+            return self.inital_scale
+        return 1 / (self.counts[item] ** self.decay_power)

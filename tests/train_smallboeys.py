@@ -7,7 +7,7 @@ from deepred.polaris_env.pokemon_red.enums import BagItem
 from deepred.polaris_env.polaris_red import PolarisRed
 from deepred.polaris_utils.callbacks import Callbacks
 
-exp_name = 'BoeysBaseline'
+exp_name = 'smallboeys'
 exp_path = "experiments/" + exp_name
 ex = Experiment(exp_name)
 
@@ -32,7 +32,7 @@ def cfg():
         flag_history_length = 5,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=10, experience=10, badges=0, events=10,  blackout=1, exploration=0),
+        reward_scales = dict(seen_pokemons=0, experience=10, badges=0, events=10,  blackout=1, exploration=0.1, early_termination=3, heal=10),
         reward_laziness_check_freq = 2048*4,
         reward_laziness_limit = 2048*4,
         savestate = "faster_red_post_parcel_pokeballs.state",
@@ -49,23 +49,23 @@ def cfg():
 
     num_workers = 64 # the +1 is for the rendering window.
     policy_path = 'polaris.policies.PPO'
-    model_path = 'deepred.models.boeysbaseline'
+    model_path = 'deepred.models.small_boeys'
     policy_class = 'PPO'
-    model_class = 'BoeysBaselineModel'
+    model_class = 'SmallBoeysModel'
 
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 1024
     max_seq_len = trajectory_length # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 1024 * num_workers * 4
     n_epochs=3
-    minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    minibatch_size = train_batch_size // 16 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
     # Our count-based exploration is a bit different, as we only count once a (map, event-flags) per episode,
     # thus, we do not count the total visitation, but more of a number of episodes where this was visited.
-    count_based_decay_power = 0.5 # this is commonly used in the literature
-    count_based_initial_scale = 1 # base bonus for new entries.
+    count_based_decay_power = 1 # this is commonly used in the literature
+    count_based_initial_scale = 10 # base bonus for new entries.
 
     default_policy_config = {
 
@@ -104,7 +104,7 @@ def cfg():
 
     restore = False
 
-    name = "train_boeys"
+    name = "test_smallboeys"
 
 @ex.automain
 def main(_config):
