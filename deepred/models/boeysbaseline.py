@@ -172,10 +172,10 @@ class BoeysBaselineModel(BaseModel):
         additional_ram_info = tf.expand_dims(obs["ram"], axis=0)
 
         concat = tf.concat([
-            additional_ram_info,
-            maps_embed,
-            events_embed, items_embed, poke_opp_head, party_head_embed,
-            map_features_embed,
+            # additional_ram_info,
+            # maps_embed,
+            # events_embed, items_embed, poke_opp_head, party_head_embed,
+            # map_features_embed,
             screen_embed
         ], axis=-1)
         return self.final_mlp(concat)
@@ -260,11 +260,11 @@ class BoeysBaselineModel(BaseModel):
         additional_ram_info = obs["ram"]
 
         concat = tf.concat([
-            additional_ram_info,
-                            maps_embed,
-                           events_embed, items_embed, poke_opp_head,
-                            party_head_embed,
-                            map_features_embed,
+            # additional_ram_info,
+            #                 maps_embed,
+            #                events_embed, items_embed, poke_opp_head,
+            #                 party_head_embed,
+            #                 map_features_embed,
                          screen_embed
                             ], axis=-1)
         return self.final_mlp(concat)
