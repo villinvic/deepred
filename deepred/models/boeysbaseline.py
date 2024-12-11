@@ -83,7 +83,7 @@ class BoeysBaselineModel(BaseModel):
         self.events_embedding = snt.Embed(len(ProgressionFlag)+1, 64, densify_gradients=True, name="event_embedding")
         self.maps_embedding = snt.Embed(len(Map)+1, 32, densify_gradients=True, name="maps_embedding")
 
-        self.final_mlp = snt.nets.MLP([256], activate_final=True, name="final_mlp")
+        self.final_mlp = snt.nets.MLP([256, 256], activate_final=True, name="final_mlp")
         self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
         self._value_logits = None
         self.value_head = snt.Linear(1, name="value_head")
@@ -172,10 +172,10 @@ class BoeysBaselineModel(BaseModel):
         additional_ram_info = tf.expand_dims(obs["ram"], axis=0)
 
         concat = tf.concat([
-            #additional_ram_info,
-            #maps_embed,
-            #events_embed, items_embed, poke_opp_head, party_head_embed,
-            #map_features_embed
+            additional_ram_info,
+            maps_embed,
+            events_embed, items_embed, poke_opp_head, party_head_embed,
+            map_features_embed,
             screen_embed
         ], axis=-1)
         return self.final_mlp(concat)
@@ -260,11 +260,11 @@ class BoeysBaselineModel(BaseModel):
         additional_ram_info = obs["ram"]
 
         concat = tf.concat([
-            #additional_ram_info,
-             #               maps_embed,
-             #               events_embed, items_embed, poke_opp_head,
-              #              party_head_embed,
-                            #map_features_embed,
+            additional_ram_info,
+                            maps_embed,
+                           events_embed, items_embed, poke_opp_head,
+                            party_head_embed,
+                            map_features_embed,
                          screen_embed
                             ], axis=-1)
         return self.final_mlp(concat)
