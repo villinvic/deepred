@@ -77,7 +77,7 @@ class SynchronousTrainer(Checkpointable):
             for pid in self.policy_map
         }
         for pid, policy in self.policy_map.items():
-            policy.options["count_based_exploration_scales"] = self.visitation_counts[pid].get_scales()
+            policy.options["hash_counts"] = self.visitation_counts[pid].get_counts()
 
 
         self.params_map = ParamsMap(**{
@@ -172,8 +172,8 @@ class SynchronousTrainer(Checkpointable):
                     visitation_counts = exp_batch.custom_metrics.pop("to_pop/visited_hash", None)
                     if visitation_counts is not None:
                         self.visitation_counts[pid].push_samples(visitation_counts)
-                        self.policy_map[pid].options["count_based_exploration_scales"] \
-                            = self.visitation_counts[pid].get_scales()
+                        self.policy_map[pid].options["hash_counts"] \
+                            = self.visitation_counts[pid].get_counts()
                     else:
                         print('Has not found any visitation counts in the metrics?')
 

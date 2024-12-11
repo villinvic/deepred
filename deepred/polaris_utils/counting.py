@@ -51,7 +51,7 @@ class VisitationCounts:
         for h, c in visited_hashes.items():
             self.counts[h] += c
 
-    def get_scales(self) -> "HashCounts":
+    def get_counts(self) -> "HashCounts":
         return HashCounts(counts=self.counts, inital_scale=self.inital_scale, decay_power=self.decay_power)
 
 class HashCounts:

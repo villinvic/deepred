@@ -121,7 +121,7 @@ class PolarisRed(PolarisEnv):
         self.metrics = PolarisRedMetrics()
         self.reward_function = PolarisRedRewardFunction(
             reward_scales=self.reward_scales,
-            count_based_exploration_scales=options[0]["count_based_exploration_scales"],
+            hash_counts=options[0]["hash_counts"],
             inital_gamestate=gamestate,
         )
         self.reward_laziness = 0
