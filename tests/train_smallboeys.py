@@ -9,7 +9,7 @@ from deepred.polaris_utils.callbacks import Callbacks
 
 exp_name = 'smallboeys'
 exp_path = "experiments/" + exp_name
-ex = Experiment(exp_name)
+ex = Experiment(exp_name) #test
 
 
 @ex.config
