@@ -12,7 +12,7 @@ from PIL import Image
 from gymnasium import spaces
 from gymnasium.spaces import Box
 
-from deepred.polaris_env.pokemon_red.enums import Map, BagItem, Pokemon, PokemonType, Move, ProgressionFlag
+from deepred.polaris_env.pokemon_red.enums import Map, BagItem, Pokemon, PokemonType, Move, ProgressionFlag, BattleType
 from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
@@ -266,7 +266,11 @@ class PolarisRedObservationSpace:
             battle_type=RamObservation(
                 extractor=lambda gamestate: gamestate.battle_type,
                 nature=ObsType.CATEGORICAL,
-                domain=(0, 3),
+                domain=(0, len(BattleType)),
+            ),
+            in_battle=RamObservation(
+                extractor=lambda gamestate: gamestate.is_in_battle,
+                nature=ObsType.BINARY,
             ),
             party_count=RamObservation(
                 extractor=lambda gamestate: gamestate.party_count,

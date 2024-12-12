@@ -250,15 +250,10 @@ class StartMenuItem(IntEnum):
     UNSELECTED = 7
 
 class BattleType(IntEnum):
-    BLACKOUT = -1
     NONE = 0
     WILD = 1
     TRAINER = 2
-
-    OTHER = 78
-    OTHER_2 = 233
-    OTHER_3 = 255
-
+    OTHER = 3
 
 class BattleKind(IntEnum):
     NORMAL = 0
@@ -267,7 +262,7 @@ class BattleKind(IntEnum):
 
 class BagItem(IntEnum):
     # Stored in [0xD31E, 0xD346]
-    NO_ITEM2 = 0x00
+    NO_ITEM = 0x00
     MASTER_BALL = 0x01
     ULTRA_BALL = 0x02
     GREAT_BALL = 0x03
@@ -351,9 +346,6 @@ class BagItem(IntEnum):
     MAX_ETHER = 0x51
     ELIXIR = 0x52
     MAX_ELIXIR = 0x53
-
-    NO_ITEM = 0xFF
-
 
     # elevator floors use item IDs
     FLOOR_B2F = 0x54

@@ -32,9 +32,9 @@ def cfg():
         flag_history_length = 5,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=0, experience=10, badges=0, events=10,  blackout=1, exploration=0.1, early_termination=3, heal=10),
+        reward_scales = dict(seen_pokemons=0, experience=4, badges=100, events=4,  blackout=0.4, exploration=0.5, early_termination=1, heal=8),
         reward_laziness_check_freq = 2048*4,
-        reward_laziness_limit = 2048*4,
+        reward_laziness_limit = 8.,
         savestate = "faster_red_post_parcel_pokeballs.state",
         session_path = "red_tests",
         record = False,
@@ -54,9 +54,9 @@ def cfg():
     model_class = 'SmallBoeysModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 1024
+    trajectory_length = 2048
     max_seq_len = trajectory_length # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 1024 * num_workers * 4
+    train_batch_size = 2048 * num_workers * 2
     n_epochs=3
     minibatch_size = train_batch_size // 16 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
@@ -64,15 +64,16 @@ def cfg():
     # count-based exploration
     # Our count-based exploration is a bit different, as we only count once a (map, event-flags) per episode,
     # thus, we do not count the total visitation, but more of a number of episodes where this was visited.
-    count_based_decay_power = 1 # this is commonly used in the literature
-    count_based_initial_scale = 10 # base bonus for new entries.
+    count_based_decay_power = 1/2 # this is commonly used in the literature
+    count_based_initial_scale = 1 # base bonus for new entries.
+    count_based_discount = 0.9
 
     default_policy_config = {
 
         'discount': 0.999,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
         'entropy_cost': 1e-2, # encourages exploration
-        'lr': 5e-4, #5e-4
+        'lr': 3e-4, #5e-4
 
         'grad_clip': 0.5,
         'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
@@ -95,7 +96,7 @@ def cfg():
     training_metrics_smoothing = 0.8
 
     checkpoint_config = dict(
-        checkpoint_frequency=50,
+        checkpoint_frequency=20,
         checkpoint_path=exp_path,
         stopping_condition={"environment_steps": 1e10},
         keep=4,

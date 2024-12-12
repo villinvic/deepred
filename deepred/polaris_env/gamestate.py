@@ -297,6 +297,14 @@ class GameState:
         return self._read(RamLocation.POKECENTER_CHECKPOINT)
 
     @cproperty
+    def current_checkpoint_id(self) -> int:
+        """
+        Returns the respawn point if we blackout.
+        """
+        return self._additional_memory.pokecenter_checkpoints.pokecenter_ids.index(self.current_checkpoint)
+
+
+    @cproperty
     def instant_text(self) -> bool:
         """
         :return: True if we are using instant text.
@@ -331,7 +339,12 @@ class GameState:
         :return: type of battle, not in battle, wild, trainer.
         """
         # Battle type is 0 when not in battle.
-        return BattleType(self._read(RamLocation.BATTLE_TYPE))
+        battle_type = self._read(RamLocation.BATTLE_TYPE)
+        try:
+            return BattleType(battle_type)
+        except ValueError:
+            # Weird battle type
+            return BattleType.OTHER
 
     @cproperty
     def battle_kind(self) -> int:
@@ -395,7 +408,7 @@ class GameState:
         """
         :return: The number of pokemons in the current party
         """
-        return self._read(RamLocation.PARTY_COUNT)
+        return min([self._read(RamLocation.PARTY_COUNT), 6])
 
     @cproperty
     def opponent_party_count(self) -> int:
@@ -803,12 +816,24 @@ class GameState:
         Returns the bag content, ordered.
         """
         items = []
-        for address in range(RamLocation.BAG_ITEMS_START, RamLocation.BAG_ITEMS_END, 2):
-            item_type = BagItem(self._read(address))
+        for c, address in zip(self.ordered_bag_counts, range(RamLocation.BAG_ITEMS_START, RamLocation.BAG_ITEMS_END-1, 2)):
+            if c == 0:
+                break
+            try:
+                item_type = BagItem(self._read(address))
+            except:
+                item_type = BagItem.NO_ITEM
+
             if item_type == BagItem.NO_ITEM:
                 break
             items.append(item_type)
-        return items + [BagItem.NO_ITEM] * (20 - len(items))
+
+        # TODO why is this len 21 sometimes ?
+        # break when item_count = 0
+        bag = items + [BagItem.NO_ITEM] * (20 - len(items))
+        return bag
+
+
 
     @cproperty
     def ordered_bag_counts(self) -> List[int]:
@@ -821,7 +846,8 @@ class GameState:
             if item_count == 0:
                 break
             item_counts.append(item_count)
-        return item_counts + [BagItem.NO_ITEM] * (20 - len(item_counts))
+        bag = item_counts + [0] * (20 - len(item_counts))
+        return bag
 
 
     @cproperty
@@ -838,7 +864,7 @@ class GameState:
         return bag_items
 
     @cproperty
-    def bag_count(self) -> bool:
+    def bag_count(self) -> int:
         """
         Is the bag full M
         """
@@ -1012,9 +1038,10 @@ class GameState:
             adjust_y = -cur_top_left_y
 
         visited = self._additional_memory.visited_tiles.get(self)[top_left_y: bottom_right_y, top_left_x:bottom_right_x]
-        cur_uint8_flag_count = round(255 * self.event_flag_count / len(ProgressionFlag))
-        d = cur_uint8_flag_count - visited
-        observed = (255 - d) * np.int32(visited > 0)
+        # cur_uint8_flag_count = round(255 * self.event_flag_count / len(ProgressionFlag))
+        # d = cur_uint8_flag_count - visited
+        # observed = (255 - d) * np.int32(visited > 0)
+        observed = np.uint8(255 - 255 * np.clip((self.step - visited) / 10_000, 0, 1))
 
         try:
             visited_tiles_on_current_map[

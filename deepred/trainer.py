@@ -156,7 +156,7 @@ class SynchronousTrainer(Checkpointable):
         frames = 0
         env_steps = 0
 
-        experience, self.running_jobs = self.worker_set.wait(self.params_map, self.running_jobs, timeout=60*4)
+        experience, self.running_jobs = self.worker_set.wait(self.params_map, self.running_jobs, timeout=60)
         print(f"Collected {len(experience)} experiences.", f"{len(self.running_jobs)} jobs remaining")
 
         enqueue_time_start = time.time()
@@ -226,6 +226,7 @@ class SynchronousTrainer(Checkpointable):
                 train_results = self.policy_map[pid].train(pulled_batch)
                 training_metrics[f"{pid}"] = train_results
                 GlobalCounter.incr(GlobalCounter.STEP)
+                self.visitation_counts[pid].discount()
                 self.params_map[pid] = self.policy_map[pid].get_params()
 
 

@@ -193,7 +193,7 @@ class GBConsole(PyBoy):
 
             self._gamestate = gamestate
             if self._gamestate.is_skippable_frame():
-                total_frames_ticked -= skip_count * 0.98 # make sure we do not skip forever.
+                total_frames_ticked -= skip_count * 0.5 # make sure we do not skip forever.
                 additional_skip += 1
                 if additional_skip > 500:
                     self.handle_error("stuck skipping.")

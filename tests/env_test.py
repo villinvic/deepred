@@ -18,8 +18,8 @@ def run(
      flag_history_length: int = 10,
      enabled_patches: Tuple[str] = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                                     "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-     reward_scales: dict = dict(exploration=1),
-     savestate: str | None = "save.state",
+     reward_scales: dict = dict(seen_pokemons=0, experience=10, badges=0, events=10,  blackout=1, exploration=0.1, early_termination=3, heal=10),
+     savestate: str | None = "faster_red_post_parcel_pokeballs.state",
      session_path: str = "red_tests",
      record: bool = False,
      speed_limit: int = 1,
@@ -45,7 +45,7 @@ def run(
         record_skipped_frame=record_skipped_frame
     ) for i in range(1)
     ]
-    options = {0: {"count_based_exploration_scales": HashCounts({})}}
+    options = {0: {"hash_counts": HashCounts({})}}
     for env in envs:
         env.reset(options=options)
     env0 = envs[0]
@@ -59,6 +59,8 @@ def run(
         for env in envs:
             observations, rewards, _, _, _ = env.step({0: action})
             env_outputs.append((observations, rewards, env.console.get_gamestate()))
+
+        print(rewards)
 
         for env in envs:
             print(env.console.get_gamestate().frame)

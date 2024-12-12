@@ -78,20 +78,22 @@ class PolarisRedRewardFunction:
         :param reward_scales: scales for each goal.
         :param inital_gamestate: initial state of the game to setup the reward function.
         """
-        self.episode_max_party_exp = -np.inf
-        self.episode_max_level = -np.inf
+        self.episode_max_party_lvl = -np.inf
         self.episode_max_event_count = 0
 
         self.scales = Goals() if reward_scales is None else Goals(** reward_scales)
         self.delta_goals = Goals()
 
-        h = hash_function((inital_gamestate.map, inital_gamestate.pos_x // 3, inital_gamestate.pos_y // 3))
+        h = hash_function((inital_gamestate.map, inital_gamestate.event_flag_count, inital_gamestate.pos_x // 3, inital_gamestate.pos_y // 3))
         self.total_exploration = 0
 
         self._cumulated_rewards = Goals()
         self._previous_gamestate = inital_gamestate
         self.hash_counts = hash_counts
         self.hash_counts.visit(h)
+        self.visited_hashes = set()
+        self.visited_event_hashes = set()
+
         self._previous_goals = self._extract_goals(inital_gamestate)
 
     def _extract_goals(
@@ -103,24 +105,25 @@ class PolarisRedRewardFunction:
         #     badges: float = 0
         badges = sum(gamestate.badges)
         #     experience: float = 0
-        experience = sum(gamestate.party_experience)
-        if experience > self.episode_max_party_exp:
-            self.episode_max_party_exp = experience
-
-        max_level = max(gamestate.party_level)
-        if max_level > self.episode_max_level:
-            # The player could always move its higher leveled pokemon into the pc
-            # This may be a breach to hack the experience related rewards.
-            # So we keep the episode maximum level to prevent that.
-            self.episode_max_level = max_level
+        party_level = sum(gamestate.party_level)
+        if party_level > self.episode_max_party_lvl:
+            self.episode_max_party_lvl = party_level
 
         event_count = gamestate.event_flag_count
         if event_count > self.episode_max_event_count:
             self.episode_max_event_count = event_count
 
-        h = hash_function((gamestate.map, gamestate.pos_x // 3, gamestate.pos_y // 3))
-        if (gamestate.map not in (Map.PALLET_TOWN, Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F)):
-            self.total_exploration += self.hash_counts[h]
+        h_all = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x // 3, gamestate.pos_y // 3))
+        h = hash_function((gamestate.map,  gamestate.pos_x // 3, gamestate.pos_y // 3))
+        if h not in self.visited_hashes:
+            self.total_exploration += 0.5
+            self.visited_hashes.add(h)
+        if h_all not in self.visited_event_hashes:
+            self.total_exploration += 1.
+            self.visited_event_hashes.add(h_all)
+
+        # if (gamestate.map not in (Map.PALLET_TOWN, Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F)):
+            #self.total_exploration += self.hash_counts[h]
             self.hash_counts.visit(h)
 
         heal = int(
@@ -140,7 +143,7 @@ class PolarisRedRewardFunction:
         return Goals(
             seen_pokemons=seen_pokemons,
             badges=badges,
-            experience=self.episode_max_party_exp,
+            experience=self.episode_max_party_lvl,
             events=self.episode_max_event_count,
             exploration=self.total_exploration,
             blackout=blackout,
@@ -163,7 +166,7 @@ class PolarisRedRewardFunction:
         rewards = Goals(
             seen_pokemons=goal_updates.seen_pokemons,
             badges=goal_updates.badges,
-            experience=goal_updates.experience / self.episode_max_level**3,
+            experience=goal_updates.experience,
             events=goal_updates.events,
             exploration=goal_updates.exploration,
             blackout=-np.maximum(0, goal_updates.blackout), # blackout_update = 1 when we blackout, -1 when we respawn.
@@ -178,7 +181,7 @@ class PolarisRedRewardFunction:
         return {
             "to_pop/visited_hash": self.hash_counts.counts,
             "rewards": self._cumulated_rewards,
-            "episode_max_level": self.episode_max_level
+            "party_level_sum": self.episode_max_party_lvl
         }
 
 

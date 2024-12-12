@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Tuple
 
 import numpy as np
+import tree
 from ml_collections import ConfigDict
 import hashlib
 from enum import Enum
@@ -38,10 +39,16 @@ class VisitationCounts:
         """
 
         self.decay_power = config.count_based_decay_power
-
+        self.discount_factor = config.count_based_discount
         self.counts = defaultdict(int)
 
         self.inital_scale = config.count_based_initial_scale
+
+    def discount(self):
+        self.counts = tree.map_structure(
+            lambda c: int(c * self.discount_factor),
+            self.counts
+        )
 
 
     def push_samples(
@@ -72,6 +79,8 @@ class HashCounts:
         self.decay_power = decay_power
 
     def visit(self, hash):
+        if hash not in self.counts:
+            self.counts[hash] = 0
         self.counts[hash] += 1
 
     def __getitem__(self, item):

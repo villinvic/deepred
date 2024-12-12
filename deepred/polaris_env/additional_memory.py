@@ -35,15 +35,11 @@ class VisitedTiles(AdditionalMemoryBlock):
         """
         if gamestate.map not in self.visited_tiles:
             map_w, map_h = MapDimensions[gamestate.map].shape
-            self.visited_tiles[gamestate.map] = np.zeros((map_h, map_w), dtype=np.uint8)
+            self.visited_tiles[gamestate.map] = np.zeros((map_h, map_w), dtype=np.int32)
 
-        # TODO: unsure how to set the values.
-        #   We need something that let us know we already walked in some places at some point in time,
-        #   The agent will have to go multiple times to some places.
-        #   Could use step counter.
-        uint8_flag_count = round(255 * gamestate.event_flag_count / len(ProgressionFlag))
         try :
-            self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = uint8_flag_count
+
+            self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.step
         except:
             print(MapDimensions[gamestate.map].shape, gamestate.pos_y, gamestate.pos_x)
 
