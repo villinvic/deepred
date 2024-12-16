@@ -35,7 +35,7 @@ class VisitedTiles(AdditionalMemoryBlock):
         """
         if gamestate.map not in self.visited_tiles:
             map_w, map_h = MapDimensions[gamestate.map].shape
-            self.visited_tiles[gamestate.map] = np.zeros((map_h, map_w), dtype=np.int32)
+            self.visited_tiles[gamestate.map] = np.ones((map_h, map_w), dtype=np.int32) * -1e8
 
         self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.step
 

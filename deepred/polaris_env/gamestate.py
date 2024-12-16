@@ -1050,7 +1050,7 @@ class GameState:
         # cur_uint8_flag_count = round(255 * self.event_flag_count / len(ProgressionFlag))
         # d = cur_uint8_flag_count - visited
         # observed = (255 - d) * np.int32(visited > 0)
-        observed = np.uint8(255 - 255 * np.clip((self.step - visited) / 10_000, 0, 1))
+        observed = np.uint8(255 - 255 * np.clip((self.step - visited) / 20_000, 0, 1))
 
         visited_tiles_on_current_map[
         adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
