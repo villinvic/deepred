@@ -1,7 +1,10 @@
 from enum import IntEnum
+from typing import List
 
 from pyboy.utils import WindowEvent
 from gymnasium.spaces import Discrete
+
+from deepred.polaris_env.gamestate import GameState
 
 
 class CustomEvent(IntEnum):
@@ -72,20 +75,45 @@ class PolarisRedActionSpace:
         self.actions = actions
         self.gym_spec = Discrete(len(self.actions))
 
+    def allowed_actions(
+            self,
+            gamestate: GameState
+    ) -> List[int]:
+        """
+        :param gamestate: Gamestate to look into for checking which action are allowed or not.
+        :return:
+        """
+        disallowed = set()
+        if gamestate.is_in_battle:
+            disallowed.add(CustomEvent.ROLL_PARTY)
+        else:
+            if gamestate.walkable_map[3, 4] == 0:
+                disallowed.add(WindowEvent.PRESS_ARROW_UP)
+            if gamestate.walkable_map[4, 3] == 0:
+                disallowed.add(WindowEvent.PRESS_ARROW_LEFT)
+            if gamestate.walkable_map[5, 4] == 0:
+                disallowed.add(WindowEvent.PRESS_ARROW_DOWN)
+            if gamestate.walkable_map[4, 5] == 0:
+                disallowed.add(WindowEvent.PRESS_ARROW_RIGHT)
+
+        return [1 if we not in disallowed else 0 for we in self.actions]
+
     def get_event(
             self,
             action: int,
+            gamestate: GameState = None
     ) -> WindowEvent:
         """
         Returns the event corresponding to the selected action
         """
         if self.human_inputs:
-            return self.human_input()
+            return self.human_input(gamestate)
 
         return self.actions[action]
 
     def human_input(
-            self
+            self,
+            gamestate: GameState = None
     ) -> WindowEvent:
         """
         Reads user input from stdin, and maps it to an action.
@@ -97,7 +125,14 @@ class PolarisRedActionSpace:
             if len(inputs) > 1:
                 inputs.pop(0)
             self.human_input_queue = inputs
-        return human_input_dict.get(self.human_input_queue.pop(0), WindowEvent.PASS)
+
+        event = human_input_dict.get(self.human_input_queue.pop(0), WindowEvent.PASS)
+        # try:
+        #     if gamestate is not None and self.allowed_actions(gamestate)[self.actions.index(event)] == 0:
+        #         event = WindowEvent.PASS
+        # except:
+        #     pass
+        return event
 
 
 

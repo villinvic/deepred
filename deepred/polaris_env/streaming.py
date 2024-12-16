@@ -31,7 +31,7 @@ class BotStreamer:
         )
 
         self.stream_step_counter = 0
-        self.upload_interval = 512
+        self.upload_interval = 800
 
     def send(self, gamestate: GameState):
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])

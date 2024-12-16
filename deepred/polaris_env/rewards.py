@@ -84,7 +84,7 @@ class PolarisRedRewardFunction:
         self.scales = Goals() if reward_scales is None else Goals(** reward_scales)
         self.delta_goals = Goals()
 
-        h = hash_function((inital_gamestate.map, inital_gamestate.event_flag_count, inital_gamestate.pos_x // 3, inital_gamestate.pos_y // 3))
+        h = hash_function((inital_gamestate.map, inital_gamestate.event_flag_count, inital_gamestate.pos_x, inital_gamestate.pos_y))
         self.total_exploration = 0
 
         self._cumulated_rewards = Goals()
@@ -113,8 +113,8 @@ class PolarisRedRewardFunction:
         if event_count > self.episode_max_event_count:
             self.episode_max_event_count = event_count
 
-        h_all = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x // 3, gamestate.pos_y // 3))
-        h = hash_function((gamestate.map,  gamestate.pos_x // 3, gamestate.pos_y // 3))
+        h_all = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
+        h = hash_function((gamestate.map,  gamestate.pos_x, gamestate.pos_y))
         if h not in self.visited_hashes:
             self.total_exploration += 0.5
             self.visited_hashes.add(h)
@@ -171,8 +171,8 @@ class PolarisRedRewardFunction:
             exploration=goal_updates.exploration,
             blackout=-np.maximum(0, goal_updates.blackout), # blackout_update = 1 when we blackout, -1 when we respawn.
             heal = np.maximum(0, goal_updates.heal)  # when we got a new checkpoint
-
         )
+
         self._cumulated_rewards = accumulate_goal_stats(rewards, self._cumulated_rewards)
         self._previous_goals = goals
         return _compute_step_reward(rewards, self.scales)

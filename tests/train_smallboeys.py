@@ -32,7 +32,7 @@ def cfg():
         flag_history_length = 5,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=0, experience=4, badges=100, events=4,  blackout=0.4, exploration=0.5, early_termination=1, heal=8),
+        reward_scales = dict(seen_pokemons=0, experience=3, badges=100, events=4,  blackout=0.4, exploration=0.05, early_termination=1, heal=8),
         reward_laziness_check_freq = 2048*4,
         reward_laziness_limit = 8.,
         savestate = "faster_red_post_parcel_pokeballs.state",
@@ -47,18 +47,18 @@ def cfg():
 
     env = PolarisRed.env_id
 
-    num_workers = 64 # the +1 is for the rendering window.
+    num_workers = 126 # the +1 is for the rendering window.
     policy_path = 'polaris.policies.PPO'
     model_path = 'deepred.models.small_boeys'
     policy_class = 'PPO'
     model_class = 'SmallBoeysModel'
 
     # the episode_length is fixed, we should train over full episodes.
-    trajectory_length = 2048
+    trajectory_length = 256
     max_seq_len = trajectory_length # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 2048 * num_workers * 2
-    n_epochs=3
-    minibatch_size = train_batch_size // 16 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    train_batch_size = 2048 * num_workers
+    n_epochs=1
+    minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration

@@ -4,6 +4,8 @@ from typing import Union, List, Dict, Tuple
 
 import numpy as np
 from PIL import Image
+from gymnasium.error import ResetNeeded
+from pyboy.utils import WindowEvent
 
 from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.pokemon_red.enums import StartMenuItem, Map, RamLocation, Pokemon, BagItem, EventFlag, TileSet, \
@@ -58,10 +60,14 @@ class GameState:
         with open(log_file, "w") as f:
             f.write(f"dump message: '{msg}'.\n")
             for name in dir(self.__class__):
-                attr = getattr(self.__class__, name, None)
-                if isinstance(attr, cproperty):
-                    value = getattr(self, name, None)
-                    f.write(f"{name}: {value}\n")
+                value = "N/A"
+                try:
+                    attr = getattr(self.__class__, name, None)
+                    if isinstance(attr, cproperty):
+                        value = getattr(self, name, None)
+                except Exception as e:
+                    value = e
+                f.write(f"{name}: {value}\n")
 
     def __init__(
             self,
@@ -301,7 +307,10 @@ class GameState:
         """
         Returns the respawn point if we blackout.
         """
-        return self._additional_memory.pokecenter_checkpoints.pokecenter_ids.index(self.current_checkpoint)
+        # TODO
+        if self.current_checkpoint in self._additional_memory.pokecenter_checkpoints.pokecenter_ids:
+            return self._additional_memory.pokecenter_checkpoints.pokecenter_ids.index(self.current_checkpoint)
+        return 0
 
 
     @cproperty
@@ -1043,12 +1052,9 @@ class GameState:
         # observed = (255 - d) * np.int32(visited > 0)
         observed = np.uint8(255 - 255 * np.clip((self.step - visited) / 10_000, 0, 1))
 
-        try:
-            visited_tiles_on_current_map[
-            adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
-            ] = observed
-        except:
-            print(MapDimensions[self.map], self.pos_x, self.pos_y)
+        visited_tiles_on_current_map[
+        adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
+        ] = observed
 
         return visited_tiles_on_current_map
 
@@ -1136,6 +1142,10 @@ class GameState:
         return warp_map
 
     @cproperty
+    def walkable_map(self) -> np.ndarray:
+        return self._ram_helper._get_screen_walkable_matrix()
+
+    @cproperty
     def feature_maps(self) -> np.ndarray:
         """
         A set of map features compiled in one image.
@@ -1153,7 +1163,7 @@ class GameState:
 
         bottom_left_screen_tiles = self.bottom_left_screen_tiles
         # walkable
-        maps[0] = self._ram_helper._get_screen_walkable_matrix() * 255
+        maps[0] = self.walkable_map * 255
 
         # Water
         if self.tileset_id == TileSet.VERMILION_PORT:
@@ -1188,6 +1198,7 @@ class GameState:
         for i in range(self.box_pokemon_count):
             offset = RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS
             species = self._read(RamLocation.BOX_POKEMON_SPECIES_START + i)
+            print(species, self.box_pokemon_count)
             level = self._read(offset + 3)
             exp = self._read_triple(offset + 14)
             hp_ev = self._read_double(offset + 17)
@@ -1318,6 +1329,7 @@ class GameState:
         The latest triggered flag events.
         """
         return [self.step - step for step in self._additional_memory.flag_history.stepstamps]
+
 
 
 def pokemon_status(status_byte):

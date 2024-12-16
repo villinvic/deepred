@@ -142,7 +142,7 @@ class PolarisRed(PolarisEnv):
         self, action_dict: Dict[int, int]
     ) -> Tuple[dict, dict, dict, dict, dict]:
 
-        event = self.input_interface.get_event(action_dict[0])
+        event = self.input_interface.get_event(action_dict[0], self.console.get_gamestate())
         if event == CustomEvent.DUMP_FRAME:
             path = self.session_path / Path("human_dump")
             path.mkdir(exist_ok=True)

@@ -37,11 +37,8 @@ class VisitedTiles(AdditionalMemoryBlock):
             map_w, map_h = MapDimensions[gamestate.map].shape
             self.visited_tiles[gamestate.map] = np.zeros((map_h, map_w), dtype=np.int32)
 
-        try :
+        self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.step
 
-            self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.step
-        except:
-            print(MapDimensions[gamestate.map].shape, gamestate.pos_y, gamestate.pos_x)
 
     def get(
             self,

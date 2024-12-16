@@ -106,7 +106,7 @@ class SmallBoeysModel(BaseModel):
     ):
         # The input is of shape (...), we need to add a Batch dimension.
         # we expand  once here as the pixels are in shape (w, h), should be (w, h, 1)
-        pixels = tf.expand_dims(tf.expand_dims(tf.cast(obs["main_screen"], tf.float32) / 255., axis=-1), axis=0)
+        pixels = tf.expand_dims(tf.cast(obs["main_screen"], tf.float32) / 255., axis=-1)
 
         conv_out = self.screen_conv_layers[0](pixels)
         conv_out = self.conv_activation(conv_out)
@@ -117,9 +117,9 @@ class SmallBoeysModel(BaseModel):
         conv_out_flat = snt.Flatten(1)(conv_out)
         screen_embed = self.screen_embedding(conv_out_flat)
 
-        feature_maps = tf.transpose(tf.expand_dims(tf.cast(obs["feature_maps"], tf.float32) / 255., axis=0), perm=[0, 2, 3, 1])
-        sprite_map = tf.expand_dims(self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64)), axis=0)
-        warp_map = tf.expand_dims(self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64)), axis=0)
+        feature_maps = tf.transpose(tf.cast(obs["feature_maps"], tf.float32) / 255., perm=[0, 2, 3, 1])
+        sprite_map = self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64))
+        warp_map = self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64))
         feature_maps = tf.concat([feature_maps, sprite_map, warp_map], axis=-1)
 
         conv_out = self.map_features_conv_layers[0](feature_maps)
@@ -130,14 +130,14 @@ class SmallBoeysModel(BaseModel):
         conv_out_flat = snt.Flatten(1)(conv_out)
         map_features_embed = self.map_features_embedding(conv_out_flat)
 
-        moves = tf.expand_dims(self.moves_embedding(tf.cast(obs["pokemon_move_ids"], tf.int64)), axis=0) # (e,)
-        pps = tf.expand_dims(tf.expand_dims(obs["pokemon_move_pps"], axis=0), axis=-1) # (1, 4,)
+        moves = self.moves_embedding(tf.cast(obs["pokemon_move_ids"], tf.int64)) # (e,)
+        pps = tf.expand_dims(obs["pokemon_move_pps"], axis=-1) # (1, 4,)
         moves_embed = tf.concat([moves, pps], axis=-1)
         moves_embed = self.moves_mlp(moves_embed)
         moves_embed = tf.reduce_max(moves_embed, axis=-2)
 
-        types = tf.expand_dims(tf.reduce_sum(self.types_embedding(tf.cast(obs["pokemon_type_ids"], tf.int64)), axis=-2), axis=0) # (e,)
-        stats = tf.expand_dims(obs["pokemon_stats"], axis=0)
+        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["pokemon_type_ids"], tf.int64)), axis=-2) # (e,)
+        stats = obs["pokemon_stats"]
         pokemons_info = tf.concat([moves_embed, types, stats], axis=-1)
         pokemons_embed = self.pokemons_mlp(pokemons_info)
 
@@ -149,23 +149,23 @@ class SmallBoeysModel(BaseModel):
         poke_opp_head = self.opp_head_embedding(opp_pokemon_embed)
         poke_opp_head = tf.reduce_max(poke_opp_head, axis=-2)
 
-        items = tf.expand_dims(self.items_embedding(tf.cast(obs['item_ids'], tf.int64)), axis=0)
-        item_quantities = tf.expand_dims(tf.expand_dims(obs['item_quantities'], axis=0), axis=-1)
+        items = self.items_embedding(tf.cast(obs['item_ids'], tf.int64))
+        item_quantities = tf.expand_dims(obs['item_quantities'], axis=-1)
         items_info = tf.concat([items, item_quantities], axis=-1)
         items_embed = self.items_mlp(items_info)
         items_embed = tf.reduce_max(items_embed, axis=-2)
 
-        events = tf.expand_dims(self.events_embedding(tf.cast(obs['recent_event_ids'], tf.int64)), axis=0)
-        events_age = tf.expand_dims(tf.expand_dims(obs['recent_event_ids_age'], axis=0), axis=-1)
+        events = self.events_embedding(tf.cast(obs['recent_event_ids'], tf.int64))
+        events_age = tf.expand_dims(obs['recent_event_ids_age'], axis=-1)
         events_info = tf.concat([events, events_age], axis=-1)
         events_embed = self.events_mlp(events_info)
         events_embed = tf.reduce_max(events_embed, axis=-2)
 
-        maps = tf.expand_dims(self.maps_embedding(tf.cast(obs['map_ids'], tf.int64)), axis=0)
+        maps = self.maps_embedding(tf.cast(obs['map_ids'], tf.int64))
         map_features = self.maps_mlp(maps)
         maps_embed = tf.reduce_max(map_features, axis=-2)
 
-        additional_ram_info = tf.expand_dims(obs["ram"], axis=0)
+        additional_ram_info = obs["ram"]
 
         concat = tf.concat([
             additional_ram_info,

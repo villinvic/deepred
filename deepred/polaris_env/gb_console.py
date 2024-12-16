@@ -320,20 +320,23 @@ class GBConsole(PyBoy):
             self,
             event: WindowEvent | CustomEvent
     ) -> GameState:
+        try:
+            if event == CustomEvent.ROLL_PARTY:
+                self.agent_helper.roll_party(gamestate=self._gamestate)
+                return self.get_actionable_frame()
 
-        if event == CustomEvent.ROLL_PARTY:
-            self.agent_helper.roll_party(gamestate=self._gamestate)
+            if self._gamestate.is_in_battle:
+                finalise = self.handle_battle_event(event)
+            else:
+                finalise = self.handle_world_event(event)
+
+            if finalise:
+                self.step_event(event)
+
             return self.get_actionable_frame()
+        except Exception as e:
+            self.handle_error(str(e))
 
-        if self._gamestate.is_in_battle:
-            finalise = self.handle_battle_event(event)
-        else:
-            finalise = self.handle_world_event(event)
-
-        if finalise:
-            self.step_event(event)
-
-        return self.get_actionable_frame()
 
 
     def get_actionable_frame(self) -> GameState:

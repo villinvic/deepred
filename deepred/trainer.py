@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Dict, Union
 
 import numpy as np
+import psutil
 import tree
 from ml_collections import ConfigDict
 
@@ -17,6 +18,7 @@ from polaris.policies.policy import Policy, PolicyParams, ParamsMap
 from polaris.experience.matchmaking import RandomMatchmaking
 from polaris.experience.sampling import ExperienceQueue, SampleBatch
 from polaris.utils.metrics import MetricBank, GlobalCounter, GlobalTimer
+from ray.util.client import ray
 
 from deepred.polaris_utils.counting import VisitationCounts
 
@@ -119,7 +121,7 @@ class SynchronousTrainer(Checkpointable):
                 self.restore()
 
             # override with user specified config if needed:
-            # self.config = config
+            self.config = config
 
             # Need to pass the restored references afterward
             self.metricbank.metrics = self.metrics
@@ -156,8 +158,16 @@ class SynchronousTrainer(Checkpointable):
         frames = 0
         env_steps = 0
 
-        experience, self.running_jobs = self.worker_set.wait(self.params_map, self.running_jobs, timeout=60)
-        print(f"Collected {len(experience)} experiences.", f"{len(self.running_jobs)} jobs remaining")
+        experience = []
+        while len(self.running_jobs) > 0:
+            exp, self.running_jobs = self.worker_set.wait(self.params_map, self.running_jobs, timeout=120)
+            experience.extend(exp)
+            print(f"Collected {len(experience)} experiences.", f"{len(self.running_jobs)} jobs remaining")
+            if len(experience)>0:
+                for w in self.worker_set.workers:
+                    if w not in self.worker_set.available_workers:
+                        print(f"Worker still running:{w}....")
+
 
         enqueue_time_start = time.time()
         num_batch = 0
@@ -223,6 +233,8 @@ class SynchronousTrainer(Checkpointable):
                 if np.any(pulled_batch[SampleBatch.VERSION] != self.policy_map[pid].version):
                     print(f"Had older samples in the batch for policy {pid} version {self.policy_map[pid].version}!"
                           f" {pulled_batch[SampleBatch.VERSION]}")
+                    # this should not happen ever.
+                    raise KeyboardInterrupt
                 train_results = self.policy_map[pid].train(pulled_batch)
                 training_metrics[f"{pid}"] = train_results
                 GlobalCounter.incr(GlobalCounter.STEP)
@@ -246,10 +258,12 @@ class SynchronousTrainer(Checkpointable):
                 self.metricbank.update(tree.flatten_with_path(metrics), prefix=f"experience/",
                                        smoothing=self.config.episode_metrics_smoothing)
 
+        ram_info = psutil.virtual_memory()
+
         misc_metrics =  [
                     (f'{pi}_queue_length', queue.size())
                     for pi, queue in self.experience_queue.items()
-                ]
+                ] + [('RAM_percent_usage', ram_info.percent)]
         if frames > 0:
             misc_metrics.append(("FPS", frames / prev_frames_dt))
         if enqueue_time_ms is not None:

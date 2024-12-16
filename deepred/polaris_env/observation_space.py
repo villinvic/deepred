@@ -244,7 +244,7 @@ class PolarisRedObservationSpace:
                 domain=(0., 30_000.)
             ),
             current_checkpoint=RamObservation(
-                extractor=lambda gamestate: gamestate.current_checkpoint,
+                extractor=lambda gamestate: gamestate.current_checkpoint_id,
                 nature=ObsType.CATEGORICAL,
                 domain=(0,len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids)),
             ),
