@@ -62,10 +62,10 @@ def _compute_step_reward(
         scales: Goals
 ) -> float:
 
-    return sum(tree.map_structure(
+    return sum([*tree.map_structure(
         lambda r, s: r * s,
     rewards, scales
-    ).values())
+    )])
 
 class PolarisRedRewardFunction:
     def __init__(

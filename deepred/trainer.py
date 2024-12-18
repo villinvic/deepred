@@ -287,6 +287,8 @@ class SynchronousTrainer(Checkpointable):
                     (f'{pi}_queue_length', queue.size())
                     for pi, queue in self.experience_queue.items()
                 ] + [('RAM_percent_usage', ram_info.percent)]
+        if len(self.ckpt_manager.distribution) > 0:
+            misc_metrics.append(("ckpt_sampling_probs", self.ckpt_manager.distribution))
         if frames > 0:
             misc_metrics.append(("FPS", frames / prev_frames_dt))
         if enqueue_time_ms is not None:
