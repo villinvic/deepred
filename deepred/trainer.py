@@ -281,6 +281,8 @@ class SynchronousTrainer(Checkpointable):
                 self.metricbank.update(tree.flatten_with_path(metrics), prefix=f"experience/",
                                        smoothing=self.config.episode_metrics_smoothing)
 
+        self.metricbank.update(tree.flatten_with_path(self.ckpt_manager.get_metrics()), prefix=f"ckpt_manager/",
+                               smoothing=0.8)
         ram_info = psutil.virtual_memory()
 
         misc_metrics =  [
