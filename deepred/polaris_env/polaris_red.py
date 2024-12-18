@@ -132,6 +132,7 @@ class PolarisRed(PolarisEnv):
         else:
             self.current_env_ckpt, ckpt = env_ckpt_sampler()
 
+        print(self.current_env_ckpt, ckpt.frame)
         gamestate = self.console.reset(ckpt)
         self.metrics = PolarisRedMetrics()
         self.reward_function = PolarisRedRewardFunction(

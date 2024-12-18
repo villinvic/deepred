@@ -102,11 +102,7 @@ class PolarisRedRewardFunction:
             self,
             gamestate: GameState
     ) -> Goals:
-        #     seen_pokemons: float = 0
         seen_pokemons = gamestate.species_seen_count
-        #     badges: float = 0
-        badges = sum(gamestate.badges)
-        #     experience: float = 0
         party_level = sum(gamestate.party_level)
         if party_level > self.episode_max_party_lvl:
             self.episode_max_party_lvl = party_level
@@ -148,7 +144,7 @@ class PolarisRedRewardFunction:
         self._previous_gamestate = gamestate
         return Goals(
             seen_pokemons=seen_pokemons,
-            badges=badges,
+            badges=gamestate.badge_count,
             experience=self.episode_max_party_lvl,
             events=self.episode_max_event_count,
             exploration=self.total_exploration,

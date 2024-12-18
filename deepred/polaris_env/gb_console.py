@@ -164,7 +164,8 @@ class GBConsole(PyBoy):
         self._checkpointer = EnvCheckpointer(
             self.output_dir.parent,
             self.checkpoint_identifiers,
-            self.max_num_checkpoints
+            self.max_num_checkpoints,
+            ckpt.ckpt_id,
         )
 
         return self._gamestate

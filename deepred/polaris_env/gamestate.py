@@ -776,10 +776,17 @@ class GameState:
     @cproperty
     def badges(self) -> List[int]:
         """
-        The total count of pokemon species seen.
+        The list of binary flags for obtained badges
         """
         binary = self._read(RamLocation.BADGES).bit_count()
         return [int(i < binary) for i in range(8)]
+
+    @cproperty
+    def badge_count(self) -> List[int]:
+        """
+        The total number of badges obtained
+        """
+        return sum(self.badges)
 
     @cproperty
     def event_flags(self) -> np.ndarray:
