@@ -1,7 +1,7 @@
 from functools import partial
 from pathlib import Path
 from typing import Union, Tuple, Callable
-
+import signal
 import mediapy
 from gymnasium.error import ResetNeeded
 from pyboy import PyBoy
@@ -9,6 +9,8 @@ from pyboy.utils import WindowEvent
 from deepred.polaris_env.action_space import CustomEvent
 from deepred.polaris_env.additional_memory import AdditionalMemory
 from deepred.polaris_env.battle_parser import parse_battle_state, BattleState
+from deepred.polaris_env.env_checkpointing.env_checkpoint import EnvCheckpoint
+from deepred.polaris_env.env_checkpointing.env_checkpointer import EnvCheckpointer
 from deepred.polaris_env.pokemon_red.enums import StartMenuItem, RamLocation
 from deepred.polaris_env.game_patching import GamePatching
 from deepred.polaris_env.agent_helper import AgentHelper
@@ -25,6 +27,12 @@ RELEASE_EVENTS = {
     WindowEvent.PASS: WindowEvent.PASS
 }
 
+def timeout_handler(signum, frame):
+    raise ResetNeeded("Took too long to handle event.")
+
+# Set the timeout signal
+signal.signal(signal.SIGALRM, timeout_handler)
+
 
 class GBConsole(PyBoy):
 
@@ -38,10 +46,13 @@ class GBConsole(PyBoy):
             record: bool = False,
             record_skipped_frames: bool = False,
             output_dir: Path = Path("deepred_console"),
-            savestate: Union[None, str] = None,
+            default_savestate: Union[None, str] = None,
             map_history_length: int = 10,
             flag_history_length: int = 10,
             enabled_patches: Tuple[str] = (),
+            checkpoint_identifiers: Tuple[str] = (),
+            max_num_checkpoints: int = 15,
+
             **kwargs
     ):
         """
@@ -52,9 +63,12 @@ class GBConsole(PyBoy):
             speed limit.
         :param render_skipped_frame: If True, we render all frames, even the "skipped" ones
         :param output_dir: Output directory for the console: screenshots, videos, dumps, etc.
-        :param savestate: If None, loads the game normally, otherwise, boots the game starting from the given state.
+        :param default_savestate: If None, loads the game normally, otherwise, boots the game starting from the given state.
+        :param enabled_patches: patches to enable for the game to be more RL-friendly.
+        :param checkpoint_identifiers: gamestate attributes to use to save checkpoints.
+        :param max_num_checkpoints: numbers of checkpoints to keep per checkpoint id.
+
         :param kwargs: Additional parameters to pass to the PyBoy constructor.
-        :param patch: patches the game to make it more RL-friendly.
         """
         self.console_id = console_id
 
@@ -80,7 +94,7 @@ class GBConsole(PyBoy):
         self.invalid_count = 0
         self.init_paths(output_dir)
 
-        self._savestate = savestate
+        self._default_savestate = default_savestate
         self._frame = 0
         self._step = 0
         self._additional_memory_maker = partial(
@@ -88,6 +102,15 @@ class GBConsole(PyBoy):
             map_history_length=map_history_length,
             flag_history_length=flag_history_length
         )
+
+        self.checkpoint_identifiers = checkpoint_identifiers
+        self.max_num_checkpoints = max_num_checkpoints
+        self._checkpointer = EnvCheckpointer(
+            self.output_dir.parent,
+            self.checkpoint_identifiers,
+            self.max_num_checkpoints
+        )
+
         self._additional_memory = self._additional_memory_maker()
         self._gamestate = GameState(self)
 
@@ -111,18 +134,39 @@ class GBConsole(PyBoy):
     def get_gamestate(self) -> GameState:
         return self._gamestate
 
-    def reset(self) -> GameState:
-        with open(self._savestate, "rb") as f:
-            self.load_state(f)
+    def reset(
+            self,
+            ckpt: EnvCheckpoint = EnvCheckpoint()
+    ) -> GameState:
+        """
+        :param ckpt: Checkpoint to load for resetting (gamestate and savestate).
+        :return: The initial gamestate.
+        """
+        if ckpt.savestate is None:
+            # restore with default savestate if empty checkpoint given
+            with open(self._default_savestate, "rb") as f:
+                self.load_state(f)
+            self._additional_memory = self._additional_memory_maker()
+            self._frame = 0
+            self._step = 0
+        else:
+            self.load_state(ckpt.savestate)
+            self._additional_memory = ckpt.additional_memory
+            self._frame = ckpt.frame
+            self._step = ckpt.step
+
         if self.record:
             self.initialise_video()
 
-        self._frame = 0
-        self._step = 0
-        self._additional_memory = self._additional_memory_maker()
         self._gamestate = self.tick(2)
         self.game_patcher.patch(self._gamestate)
         self._additional_memory.update(self._gamestate)
+        self._checkpointer = EnvCheckpointer(
+            self.output_dir.parent,
+            self.checkpoint_identifiers,
+            self.max_num_checkpoints
+        )
+
         return self._gamestate
 
     def initialise_video(self):
@@ -197,9 +241,6 @@ class GBConsole(PyBoy):
                 additional_skip += 1
                 if additional_skip > 500:
                     self.handle_error("stuck skipping.")
-
-        self._step += 1
-
 
     def validate_input(
             self,
@@ -320,7 +361,12 @@ class GBConsole(PyBoy):
             self,
             event: WindowEvent | CustomEvent
     ) -> GameState:
+        self._checkpointer.do_checkpoint_if_needed(
+            self.save_state,
+            self._gamestate
+        )
         try:
+            signal.alarm(15)  # Set timeout for 15 seconds
             if event == CustomEvent.ROLL_PARTY:
                 self.agent_helper.roll_party(gamestate=self._gamestate)
                 return self.get_actionable_frame()
@@ -345,6 +391,8 @@ class GBConsole(PyBoy):
         # Is this fine to patch here ?
         self.game_patcher.patch(self._gamestate)
         self._additional_memory.update(self._gamestate)
+        signal.alarm(0)
+        self._step += 1
         return self._gamestate
 
     def handle_error(

@@ -20,6 +20,7 @@ from polaris.experience.sampling import ExperienceQueue, SampleBatch
 from polaris.utils.metrics import MetricBank, GlobalCounter, GlobalTimer
 from ray.util.client import ray
 
+from deepred.polaris_env.env_checkpointing.env_checkpoint_manager import EnvCheckpointManager
 from deepred.polaris_utils.counting import VisitationCounts
 
 
@@ -74,12 +75,22 @@ class SynchronousTrainer(Checkpointable):
             for policy_param in policy_params
         }
 
+
+        # I think this does not help the agent exploe like we want
         self.visitation_counts: Dict[str, VisitationCounts] = {
             pid: VisitationCounts(self.config)
             for pid in self.policy_map
         }
         for pid, policy in self.policy_map.items():
             policy.options["hash_counts"] = self.visitation_counts[pid].get_counts()
+        ##########################################################
+        self.ckpt_manager = EnvCheckpointManager(
+            temperature=config.env_checkpoint_temperature,
+            score_lr=config.env_checkpoint_score_lr,
+            epsilon=config.env_checkpoint_epsilon,
+            checkpoint_path=config.env_checkpoint_path,
+        )
+
 
 
         self.params_map = ParamsMap(**{
@@ -110,7 +121,8 @@ class SynchronousTrainer(Checkpointable):
                 "config": self.config,
                 "params_map": self.params_map,
                 "metrics": self.metrics,
-                "visitation_counts": self.visitation_counts
+                "visitation_counts": self.visitation_counts,
+                "ckpt_manager": self.ckpt_manager
             }
         )
 
@@ -163,7 +175,7 @@ class SynchronousTrainer(Checkpointable):
             exp, self.running_jobs = self.worker_set.wait(self.params_map, self.running_jobs, timeout=120)
             experience.extend(exp)
             print(f"Collected {len(experience)} experiences.", f"{len(self.running_jobs)} jobs remaining")
-            if len(experience)>0:
+            if len(self.running_jobs)>0:
                 for w in self.worker_set.workers:
                     if w not in self.worker_set.available_workers:
                         print(f"Worker still running:{w}....")
@@ -186,6 +198,13 @@ class SynchronousTrainer(Checkpointable):
                             = self.visitation_counts[pid].get_counts()
                     else:
                         print('Has not found any visitation counts in the metrics?')
+                    env_ckpt_id, env_ckpt_score = exp_batch.custom_metrics.pop("to_pop/env_ckpt", (None, None))
+                    if env_ckpt_id is not None:
+                        self.ckpt_manager.update_scores(env_ckpt_id ,env_ckpt_score)
+                    else:
+                        pass
+                        # we go there if no env checkpoint was generated yet.
+
 
             else: # Experience batch
                 batch_pid = exp_batch.get_owner()
@@ -209,6 +228,10 @@ class SynchronousTrainer(Checkpointable):
                 else:
                     # toss the batch...
                     pass
+
+        self.ckpt_manager.update()
+        for pid, policy in self.policy_map.items():
+            policy.options["env_ckpt_sampler"] = self.ckpt_manager.get_sampler()
 
         for pid, batches in to_push.items():
             self.experience_queue[pid].push(batches)

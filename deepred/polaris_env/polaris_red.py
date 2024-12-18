@@ -4,10 +4,12 @@ from typing import Union, Dict, Optional, Tuple
 
 from pathlib import Path
 
+import tree
 from polaris.environments import PolarisEnv
 from pyboy.utils import WindowEvent
 
 from deepred.polaris_env.action_space import PolarisRedActionSpace, CustomEvent
+from deepred.polaris_env.env_checkpointing.env_checkpoint import EnvCheckpoint
 from deepred.polaris_env.gb_console import GBConsole
 from deepred.polaris_env.metrics import PolarisRedMetrics
 from deepred.polaris_env.observation_space import PolarisRedObservationSpace
@@ -35,12 +37,15 @@ class PolarisRed(PolarisEnv):
             framestack: int = 3,
             stack_oldest_only: bool = False,
             reward_scales: dict  | None = None,
-            reward_laziness_check_freq: int = 2048,
-            reward_laziness_limit: int = 2048 * 4,
-            savestate: Union[None, str] = None,
+            reward_laziness_check_freq: int = 8192,
+            reward_laziness_limit: int = 8,
+            default_savestate: Union[None, str] = None,
             map_history_length: int = 10,
             flag_history_length: int = 10,
             enabled_patches: Tuple[str] = (),
+            checkpoint_identifiers: Tuple[str] = ("map",),
+            max_num_checkpoints: int = 15,
+            env_checkpoint_scoring: dict = {},
             session_path: str = "red_tests",
             render: bool = True,
             record: bool = False,
@@ -70,10 +75,12 @@ class PolarisRed(PolarisEnv):
             record=record,
             record_skipped_frames=record_skipped_frame,
             output_dir=self.session_path / Path(f"console_{self.env_index}"),
-            savestate=savestate,
+            default_savestate=default_savestate,
             map_history_length = map_history_length,
             flag_history_length = flag_history_length,
             enabled_patches=enabled_patches,
+            checkpoint_identifiers=checkpoint_identifiers,
+            max_num_checkpoints=max_num_checkpoints,
             **config
         )
         # We perform a reset + tick to get the gamestate.
@@ -96,11 +103,12 @@ class PolarisRed(PolarisEnv):
         self.action_space = self.input_interface.gym_spec
         self.observation_space = self.observation_interface.gym_spec
 
-
         self.stream = stream
         if stream:
             self.streamer = BotStreamer(self.env_index, bot_name=bot_name)
 
+        self.env_ckpt_scoring: dict = env_checkpoint_scoring
+        self.current_env_ckpt: str | None = None
         self.metrics : Union[PolarisRedMetrics, None] = None
         self.reward_scales = reward_scales
         self.reward_laziness_check_freq = reward_laziness_check_freq
@@ -117,7 +125,14 @@ class PolarisRed(PolarisEnv):
             options: dict[str, dict] = None,
     ) -> Tuple[Dict[int, dict], dict]:
 
-        gamestate = self.console.reset()
+        env_ckpt_sampler = options[0].get("env_ckpt_sampler", None)
+        if env_ckpt_sampler is None:
+            self.current_env_ckpt = None
+            ckpt = EnvCheckpoint()
+        else:
+            self.current_env_ckpt, ckpt = env_ckpt_sampler()
+
+        gamestate = self.console.reset(ckpt)
         self.metrics = PolarisRedMetrics()
         self.reward_function = PolarisRedRewardFunction(
             reward_scales=self.reward_scales,
@@ -206,6 +221,14 @@ class PolarisRed(PolarisEnv):
         }
         d.update(self.reward_function.get_metrics())
         d.update(self.metrics.get_metrics(self.console.get_gamestate()))
+        d["step_count"] = self.step_count
+
+        if self.current_env_ckpt is not None:
+            score = 0
+            for metric_name, scale in self.env_ckpt_scoring.items():
+                score += d[metric_name] * scale
+            d["to_pop/env_ckpt"] = (self.current_env_ckpt, score)
+
         return d
 
 

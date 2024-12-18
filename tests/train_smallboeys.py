@@ -32,7 +32,7 @@ def cfg():
         flag_history_length = 5,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=0, experience=1, badges=100, events=4,  blackout=0.4, exploration=0.05, early_termination=1, heal=4),
+        reward_scales = dict(seen_pokemons=0, experience=1, badges=100, events=8,  blackout=0.4, exploration=0.075, early_termination=1, heal=8, visited_maps=2),
         reward_laziness_check_freq = 2048*4,
         reward_laziness_limit = 8.,
         savestate = "faster_red_post_parcel_pokeballs.state",
@@ -57,7 +57,7 @@ def cfg():
     trajectory_length = 512
     max_seq_len = trajectory_length # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
     train_batch_size = 512 * num_workers
-    n_epochs=3
+    n_epochs=1
     minibatch_size = 4608 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
@@ -70,16 +70,16 @@ def cfg():
 
     default_policy_config = {
 
-        'discount': 0.998,  # rewards are x0,129 after 2048 steps.
+        'discount': 0.999,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
         'entropy_cost': 1e-2, # encourages exploration
-        'lr': 3e-4, #5e-4
+        'lr': 5e-4, #5e-4
 
         'grad_clip': 0.5,
-        'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
+        'ppo_clip': 0.15, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
         'initial_kl_coeff': 0.5,
-        'kl_target': 0.02,
+        'kl_target': 0.005,
         "vf_clip": 10.
         }
 

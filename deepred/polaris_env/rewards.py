@@ -36,6 +36,7 @@ class Goals(NamedTuple):
     early_termination: float = 0
     # computed with map-(event flags) hash
     exploration: float = 0
+    visited_maps: float = 0
 
 
 def _get_goals_delta(
@@ -61,10 +62,10 @@ def _compute_step_reward(
         scales: Goals
 ) -> float:
 
-    return sum([*tree.map_structure(
+    return sum(tree.map_structure(
         lambda r, s: r * s,
     rewards, scales
-    )])
+    ).values())
 
 class PolarisRedRewardFunction:
     def __init__(
@@ -93,7 +94,8 @@ class PolarisRedRewardFunction:
         self.hash_counts.visit(h)
         self.visited_hashes = set()
         self.visited_event_hashes = set()
-
+        self.visited_maps = {Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_2F, Map.REDS_HOUSE_1F, Map.PALLET_TOWN}
+        
         self._previous_goals = self._extract_goals(inital_gamestate)
 
     def _extract_goals(
@@ -112,19 +114,23 @@ class PolarisRedRewardFunction:
         event_count = gamestate.event_flag_count
         if event_count > self.episode_max_event_count:
             self.episode_max_event_count = event_count
+            
+        if gamestate.map not in self.visited_maps:
+            self.visited_maps.add(gamestate.map)
 
-        h_all = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
-        h = hash_function((gamestate.map,  gamestate.pos_x, gamestate.pos_y))
-        if h not in self.visited_hashes:
-            self.total_exploration += 0.5
-            self.visited_hashes.add(h)
-        if h_all not in self.visited_event_hashes:
-            self.total_exploration += 1.
-            self.visited_event_hashes.add(h_all)
+        if gamestate.map not in (Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_2F, Map.REDS_HOUSE_1F, Map.PALLET_TOWN):
+            h_all = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
+            h = hash_function((gamestate.map,  gamestate.pos_x, gamestate.pos_y))
+            if h not in self.visited_hashes:
+                self.total_exploration += 0.5
+                self.visited_hashes.add(h)
+            if h_all not in self.visited_event_hashes:
+                self.total_exploration += 1.
+                self.visited_event_hashes.add(h_all)
 
-        # if (gamestate.map not in (Map.PALLET_TOWN, Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F)):
-            #self.total_exploration += self.hash_counts[h]
-            self.hash_counts.visit(h)
+            # if (gamestate.map not in (Map.PALLET_TOWN, Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F)):
+                #self.total_exploration += self.hash_counts[h]
+                self.hash_counts.visit(h)
 
         heal = int(
             self._previous_gamestate.current_checkpoint != gamestate.current_checkpoint
@@ -147,7 +153,8 @@ class PolarisRedRewardFunction:
             events=self.episode_max_event_count,
             exploration=self.total_exploration,
             blackout=blackout,
-            heal=heal
+            heal=heal,
+            visited_maps=len(self.visited_maps)
         )
 
     def _get_goal_updates(
@@ -170,7 +177,8 @@ class PolarisRedRewardFunction:
             events=goal_updates.events,
             exploration=goal_updates.exploration,
             blackout=-np.maximum(0, goal_updates.blackout), # blackout_update = 1 when we blackout, -1 when we respawn.
-            heal = np.maximum(0, goal_updates.heal)  # when we got a new checkpoint
+            heal = np.maximum(0, goal_updates.heal),  # when we got a new checkpoint
+            visited_maps = goal_updates.visited_maps
         )
 
         self._cumulated_rewards = accumulate_goal_stats(rewards, self._cumulated_rewards)
