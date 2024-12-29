@@ -46,16 +46,19 @@ class PolarisRedMetrics:
             final_gamestate: GameState
     ):
         pokemons = defaultdict(int)
-        for pokemon in final_gamestate.party_pokemons:
-            if pokemon not in (Pokemon.M_GLITCH, Pokemon.NONE):
-                pokemons[pokemon.name] += 1
+
+        for pokemon in Pokemon:
+            if pokemon not in (Pokemon.M_GLITCH, Pokemon.NONE) and pokemon in final_gamestate.party_pokemons:
+                pokemons[pokemon.name] += 100
+            else:
+                pokemons[pokemon.name] = 0
 
         return {
             "num_visited_maps": len(self.visitated_maps),
             #"visited_maps": self.visitated_maps, # sets are not supported as metrics.
             "items_used_in_battle": self.items_used_in_battle,
             "items_bought_in_mart": self.items_bought_in_mart,
-            "party_pokemons": pokemons,
+            "party_pokemons": np.array(pokemons), # pass a numpy array to interpret this as a barplot
             "money": final_gamestate.player_money,
             "num_triggered_flags": np.sum(final_gamestate.event_flags)
         }

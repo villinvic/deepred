@@ -25,24 +25,28 @@ def cfg():
         enable_start = False,
         enable_roll_party = True,
         enable_pass = False,
-        downscaled_screen_shape = (36, 40),
+        downscaled_screen_shape = (72, 80),
         framestack = 3,
         stack_oldest_only = False, # maybe True could speed up.
-        map_history_length = 5,
-        flag_history_length = 5,
+        map_history_length = 15,
+        flag_history_length = 15,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales = dict(seen_pokemons=0, experience=1, badges=100, events=8,  blackout=0.4, exploration=0.075, early_termination=1, heal=8, visited_maps=2),
-        reward_laziness_check_freq = 2048*4,
-        reward_laziness_limit = 8.,
-        savestate = "faster_red_post_parcel_pokeballs.state",
+        checkpoint_identifiers = ("visited_pokemon_centers_count", "badge_count"),
+        max_num_checkpoints = 15,
+        env_checkpoint_scoring = {"total_rewards": 1},
+        default_savestate = "faster_red_post_parcel_pokeballs.state",
+        reward_scales = dict(seen_pokemons=5, experience=5, badges=100, events=20, opponent_level=1,
+                             blackout=0.5, exploration=0.25, early_termination=10, heal=300, visited_maps=0),
+        laziness_delta_t = 2048*5,
+        laziness_threshold = 10,
         session_path = "red_tests",
         record = False,
         speed_limit = 2,
         record_skipped_frame = False,
         render = False,
         stream = True,
-        bot_name = "deepred_b"
+        bot_name = "deepred"
     )
 
     env = PolarisRed.env_id
@@ -56,9 +60,9 @@ def cfg():
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 512
     max_seq_len = trajectory_length # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 512 * num_workers
+    train_batch_size = 2048 * num_workers
     n_epochs=1
-    minibatch_size = 4608 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    minibatch_size = 512*6 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
@@ -68,18 +72,23 @@ def cfg():
     count_based_initial_scale = 1 # base bonus for new entries.
     count_based_discount = 0.9
 
+    # env checkpoint config
+    env_checkpoint_temperature = 30 # temperature for the softmax distribution of checkpoints.
+    env_checkpoint_score_lr = 0.1 # speed at which we update the scores for the checkpoints
+    env_checkpoint_epsilon = 0.2 # frequency at which we pick random checkpoints
+
     default_policy_config = {
 
-        'discount': 0.999,  # rewards are x0,129 after 2048 steps.
+        'discount': 0.998,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 1e-2, # encourages exploration
-        'lr': 5e-4, #5e-4
+        'entropy_cost': 5e-3, # encourages exploration
+        'lr': 3e-4, #5e-4
 
         'grad_clip': 0.5,
-        'ppo_clip': 0.15, # smaller clip coefficient will lead to more conservative updates.
+        'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
         'baseline_coeff': 0.5,
         'initial_kl_coeff': 0.5,
-        'kl_target': 0.005,
+        'kl_target': 1.,
         "vf_clip": 10.
         }
 
@@ -105,7 +114,7 @@ def cfg():
 
     restore = False
 
-    name = "test_smallboeys"
+    name = "test_smallboeys_checkpoints"
 
 @ex.automain
 def main(_config):
@@ -117,7 +126,12 @@ def main(_config):
     from deepred.trainer import SynchronousTrainer
 
     config = ConfigDict(_config)
-    PolarisRed(**config["env_config"]).register()
+
+
+    dummy_env = PolarisRed(**config["env_config"])
+    dummy_env.register()
+    config.env_checkpoint_path = dummy_env.console._checkpointer.path
+
 
     wandb.init(
         config=_config,

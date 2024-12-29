@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Callable, Any, Tuple, Union, List, Dict
 
 import cv2
+from skimage.transform import downscale_local_mean
+
 import gymnasium.spaces
 import numpy as np
 import tree
@@ -164,7 +166,7 @@ class PixelsObservation(Observation):
         else:
 
             h, w = downscaled_shape
-            self.opencv_downscaled_shape = (w, h) # we reverse w and h for opencv.
+            #self.opencv_downscaled_shape = (w, h) # we reverse w and h for opencv.
             if self.stack_oldest_only:
                 h *= 2
             else:
@@ -192,11 +194,16 @@ class PixelsObservation(Observation):
         if pixels.shape == self.stacked_shape:
             downscaled = pixels
         else:
-            downscaled = cv2.resize(
-                pixels,
-                self.opencv_downscaled_shape,
-                interpolation=cv2.INTER_AREA,
-            )
+            h_orig, w_orig = pixels.shape
+            h_factor = h_orig // h
+            w_factor = w_orig // w
+
+            downscaled = downscale_local_mean(pixels, (h_factor, w_factor)).astype(np.uint8)
+            # downscaled = cv2.resize(
+            #     pixels,
+            #     self.opencv_downscaled_shape,
+            #     interpolation=cv2.INTER_AREA,
+            # )
 
         if self.stack_oldest_only:
             # Here, we only stack the most recent pixels to the oldest one in the stack.
@@ -205,8 +212,8 @@ class PixelsObservation(Observation):
             self._pixel_history[h:] = self._pixel_history[:-h]
             self._pixel_history[:h] = downscaled
 
-            input_array[:h] = downscaled
             input_array[h:] = self._pixel_history[-h:]
+            input_array[:h] = downscaled
 
         else:
             if self.framestack > 1:

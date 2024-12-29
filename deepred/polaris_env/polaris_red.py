@@ -1,10 +1,10 @@
 
 from typing import Union, Dict, Optional, Tuple
-
+import signal
 
 from pathlib import Path
 
-import tree
+from gymnasium.error import ResetNeeded
 from polaris.environments import PolarisEnv
 from pyboy.utils import WindowEvent
 
@@ -15,6 +15,14 @@ from deepred.polaris_env.metrics import PolarisRedMetrics
 from deepred.polaris_env.observation_space import PolarisRedObservationSpace
 from deepred.polaris_env.rewards import PolarisRedRewardFunction
 from deepred.polaris_env.streaming import BotStreamer
+
+
+
+def timeout_handler(signum, frame):
+    raise ResetNeeded("Took too long to handle event.")
+
+# Set the timeout signal
+signal.signal(signal.SIGALRM, timeout_handler)
 
 
 class PolarisRed(PolarisEnv):
@@ -37,8 +45,8 @@ class PolarisRed(PolarisEnv):
             framestack: int = 3,
             stack_oldest_only: bool = False,
             reward_scales: dict  | None = None,
-            reward_laziness_check_freq: int = 8192,
-            reward_laziness_limit: int = 8,
+            laziness_delta_t: int = 2048 * 5,
+            laziness_threshold: int = 6,
             default_savestate: Union[None, str] = None,
             map_history_length: int = 10,
             flag_history_length: int = 10,
@@ -109,11 +117,14 @@ class PolarisRed(PolarisEnv):
 
         self.env_ckpt_scoring: dict = env_checkpoint_scoring
         self.current_env_ckpt: str | None = None
+        self.current_env_ckpt_num: int | None = None
+
         self.metrics : Union[PolarisRedMetrics, None] = None
         self.reward_scales = reward_scales
-        self.reward_laziness_check_freq = reward_laziness_check_freq
-        self.reward_laziness = 0
-        self.reward_laziness_limit = reward_laziness_limit
+
+        self.laziness_delta_t = laziness_delta_t
+        self.laziness_threshold = laziness_threshold
+
         self.reward_function: Union[PolarisRedRewardFunction, None] = None
         self.input_dict: Union[Dict, None] = None
 
@@ -129,25 +140,25 @@ class PolarisRed(PolarisEnv):
         if env_ckpt_sampler is None:
             self.current_env_ckpt = None
             ckpt = EnvCheckpoint()
+            self.current_env_ckpt_num = 0
         else:
-            self.current_env_ckpt, ckpt = env_ckpt_sampler()
+            self.current_env_ckpt, self.current_env_ckpt_num, ckpt = env_ckpt_sampler()
 
-        print(self.current_env_ckpt, ckpt.frame)
         gamestate = self.console.reset(ckpt)
         self.metrics = PolarisRedMetrics()
         self.reward_function = PolarisRedRewardFunction(
             reward_scales=self.reward_scales,
             hash_counts=options[0]["hash_counts"],
             inital_gamestate=gamestate,
+            laziness_delta_t=self.laziness_delta_t,
+            laziness_threshold=self.laziness_threshold
         )
-        self.reward_laziness = 0
 
         self.input_dict = self.observation_space.sample()
         self.observation_interface.inject(
             gamestate,
             self.input_dict
         )
-
         self.step_count = 0
 
         # No need to make a copy of the input dict, we perform a deepcopy in polaris.
@@ -157,6 +168,8 @@ class PolarisRed(PolarisEnv):
     def step(
         self, action_dict: Dict[int, int]
     ) -> Tuple[dict, dict, dict, dict, dict]:
+
+        signal.alarm(60) # cut an episode longer that needed, to catch hanging workers.
 
         event = self.input_interface.get_event(action_dict[0], self.console.get_gamestate())
         if event == CustomEvent.DUMP_FRAME:
@@ -184,16 +197,8 @@ class PolarisRed(PolarisEnv):
         self.metrics.update(gamestate)
         reward = self.reward_function.compute_step_rewards(gamestate)
         # TODO: put in config
-        self.reward_laziness += reward
-
         self.step_count += 1
-        if self.step_count % self.reward_laziness_check_freq == 0:
-            early_termination = (self.reward_laziness < self.reward_laziness_limit)
-            self.reward_laziness = 0
-        else:
-            early_termination = False
-
-
+        early_termination = self.reward_function.is_lazy()
 
         if early_termination:
             reward -= self.reward_scales["early_termination"]
@@ -209,7 +214,9 @@ class PolarisRed(PolarisEnv):
             self.on_episode_end()
 
         if self.stream:
-            self.streamer.send(self.console.get_gamestate())
+            self.streamer.send(self.console.get_gamestate(), self.current_env_ckpt_num)
+
+        signal.alarm(0)
 
         return {0: self.input_dict}, {0: reward}, dones, dones, self.empty_info_dict
 

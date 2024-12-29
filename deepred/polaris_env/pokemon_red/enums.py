@@ -84,6 +84,12 @@ class RamLocation(IntEnum):
     PARTY_3_LEVEL = 0xD210
     PARTY_4_LEVEL = 0xD23C
     PARTY_5_LEVEL = 0xD268
+    OPPONENT_POKEMON_0_LEVEL = 0xD8C5
+    OPPONENT_POKEMON_1_LEVEL = 0xD8F1
+    OPPONENT_POKEMON_2_LEVEL = 0xD91D
+    OPPONENT_POKEMON_3_LEVEL = 0xD949
+    OPPONENT_POKEMON_4_LEVEL = 0xD975
+    OPPONENT_POKEMON_5_LEVEL = 0xD9A1
     SENT_OUT_PARTY_POS = 0xCC2F
     CAUGHT_SPECIES_START = 0xD2F7
     CAUGHT_SPECIES_END = 0xD309
@@ -262,7 +268,6 @@ class BattleKind(IntEnum):
 
 class BagItem(IntEnum):
     # Stored in [0xD31E, 0xD346]
-    NO_ITEM = 0x00
     MASTER_BALL = 0x01
     ULTRA_BALL = 0x02
     GREAT_BALL = 0x03
@@ -417,6 +422,8 @@ class BagItem(IntEnum):
     TM_ROCK_SLIDE       = 0xF8
     TM_TRI_ATTACK       = 0xF9
     TM_SUBSTITUTE       = 0xFA
+    NO_ITEM = 0xFF
+
 
 class Pokemon(IntEnum):
     M_GLITCH = 0x0
@@ -1343,9 +1350,9 @@ class ProgressionFlag(Enum):
     BEAT_ROUTE_21_TRAINER_6              = 0x517 # (D7E9, bit 7)
     BEAT_ROUTE_21_TRAINER_7              = 0x518 # (D7EA, bit 0)
     BEAT_ROUTE_21_TRAINER_8              = 0x519 # (D7EA, bit 1)
-    FIRST_ROUTE22_RIVAL_BATTLE           = 0x520 # (D7EB, bit 0)
+    #FIRST_ROUTE22_RIVAL_BATTLE           = 0x520 # (D7EB, bit 0) # optional event
     SECOND_ROUTE22_RIVAL_BATTLE          = 0x521 # (D7EB, bit 1)
-    BEAT_ROUTE22_RIVAL_1ST_BATTLE        = 0x525 # (D7EB, bit 5)
+    #BEAT_ROUTE22_RIVAL_1ST_BATTLE        = 0x525 # (D7EB, bit 5)
     BEAT_ROUTE22_RIVAL_2ND_BATTLE        = 0x526 # (D7EB, bit 6)
     ROUTE22_RIVAL_WANTS_BATTLE           = 0x527 # (D7EB, bit 7)
     PASSED_CASCADEBADGE_CHECK            = 0x530 # (D7ED, bit 0)

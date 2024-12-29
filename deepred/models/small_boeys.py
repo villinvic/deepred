@@ -49,17 +49,17 @@ class SmallBoeysModel(BaseModel):
 
         self.screen_conv_layers = [
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"screen{kernel_size}")
-            for num_ch, kernel_size, stride, padding in [(32, 8, 4, "VALID"), (64, 4, 2, "VALID"), (64, 3, 1, "VALID")]
+            for num_ch, kernel_size, stride, padding in [(64, 8, 4, "VALID"), (128, 4, 2, "VALID"), (128, 3, 1, "VALID")]
         ]
         self.screen_conv_max_pool = tf.keras.layers.MaxPooling2D((3, 1), strides=(3, 1))
 
         self.map_features_conv_layers = [
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"map{kernel_size}")
-            for num_ch, kernel_size, stride, padding in [(32, 4, 1, "VALID"), (64, 4, 1, "VALID"), (128, 3, 1, "VALID")]
+            for num_ch, kernel_size, stride, padding in [(64, 4, 1, "VALID"), (128, 4, 1, "VALID"), (256, 3, 1, "VALID")]
         ]
 
         self.screen_embedding = snt.nets.MLP([256], activate_final=True, name="screen_embedding")
-        self.map_features_embedding = snt.nets.MLP([256], activate_final=True, name="map_features_embedding")
+        self.map_features_embedding = snt.nets.MLP([512], activate_final=True, name="map_features_embedding")
         self.moves_mlp = snt.nets.MLP([8, 8], activate_final=True, name="moves_mlp")
 
         self.pokemons_mlp = snt.nets.MLP([32, 32], activate_final=True, name="pokemons_mlp")
@@ -81,7 +81,7 @@ class SmallBoeysModel(BaseModel):
         self.events_embedding = snt.Embed(len(ProgressionFlag)+1, 16, densify_gradients=True, name="event_embedding")
         self.maps_embedding = snt.Embed(len(Map)+1, 16, densify_gradients=True, name="maps_embedding")
 
-        self.final_mlp = snt.nets.MLP([256, 256], activate_final=True, name="final_mlp")
+        self.final_mlp = snt.nets.MLP([512, 512], activate_final=True, name="final_mlp")
         self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
         self._value_logits = None
         self.value_head = snt.Linear(1, name="value_head")

@@ -90,6 +90,7 @@ class SynchronousTrainer(Checkpointable):
             epsilon=config.env_checkpoint_epsilon,
             checkpoint_path=config.env_checkpoint_path,
         )
+        self.ckpt_manager.update()
 
 
 
@@ -200,7 +201,7 @@ class SynchronousTrainer(Checkpointable):
                         print('Has not found any visitation counts in the metrics?')
                     env_ckpt_id, env_ckpt_score = exp_batch.custom_metrics.pop("to_pop/env_ckpt", (None, None))
                     if env_ckpt_id is not None:
-                        self.ckpt_manager.update_scores(env_ckpt_id ,env_ckpt_score)
+                        self.ckpt_manager.update_scores(env_ckpt_id , env_ckpt_score)
                     else:
                         pass
                         # we go there if no env checkpoint was generated yet.

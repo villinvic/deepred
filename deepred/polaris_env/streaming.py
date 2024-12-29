@@ -15,8 +15,7 @@ class BotStreamer:
         self.stream_metadata = {
             "user": bot_name,
             "env_id": console_id,
-            "color": "#a30000",
-            "extra": "",
+            "color": "#a30000"
         }
         self.ws_address = "wss://transdimensional.xyz/broadcast"
 
@@ -33,11 +32,16 @@ class BotStreamer:
         self.stream_step_counter = 0
         self.upload_interval = 800
 
-    def send(self, gamestate: GameState):
+    def send(self, gamestate: GameState, sprite_id: int = 0):
         self.coord_list.append([gamestate.pos_x, gamestate.pos_y, gamestate.map.value])
 
         if self.stream_step_counter >= self.upload_interval:
+            self.stream_metadata.update(
+                extra="",
+                sprite_id=sprite_id,
+            )
             self.loop.run_until_complete(
+
                 self.broadcast_ws_message(
                     json.dumps(
                         {

@@ -1,7 +1,6 @@
 from functools import partial
 from pathlib import Path
 from typing import Union, Tuple, Callable
-import signal
 import mediapy
 from gymnasium.error import ResetNeeded
 from pyboy import PyBoy
@@ -26,13 +25,6 @@ RELEASE_EVENTS = {
     WindowEvent.PRESS_BUTTON_START: WindowEvent.RELEASE_BUTTON_START,
     WindowEvent.PASS: WindowEvent.PASS
 }
-
-def timeout_handler(signum, frame):
-    raise ResetNeeded("Took too long to handle event.")
-
-# Set the timeout signal
-signal.signal(signal.SIGALRM, timeout_handler)
-
 
 class GBConsole(PyBoy):
 
@@ -83,7 +75,7 @@ class GBConsole(PyBoy):
         self.agent_helper = AgentHelper()
 
         self.render = render
-        self.min_frame_skip = 20  # 24 (seems unnecessarily large ?)
+        self.min_frame_skip = 24  # 24 (seems unnecessarily large ?)
         self.set_emulation_speed(speed_limit if render else 0)
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
@@ -238,7 +230,7 @@ class GBConsole(PyBoy):
 
             self._gamestate = gamestate
             if self._gamestate.is_skippable_frame():
-                total_frames_ticked -= skip_count * 0.5 # make sure we do not skip forever.
+                total_frames_ticked -= skip_count * 0.99 # make sure we do not skip forever.
                 additional_skip += 1
                 if additional_skip > 500:
                     self.handle_error("stuck skipping.")
@@ -367,7 +359,6 @@ class GBConsole(PyBoy):
             self._gamestate
         )
         try:
-            signal.alarm(15)  # Set timeout for 15 seconds
             if event == CustomEvent.ROLL_PARTY:
                 self.agent_helper.roll_party(gamestate=self._gamestate)
                 return self.get_actionable_frame()
@@ -392,7 +383,6 @@ class GBConsole(PyBoy):
         # Is this fine to patch here ?
         self.game_patcher.patch(self._gamestate)
         self._additional_memory.update(self._gamestate)
-        signal.alarm(0)
         self._step += 1
         return self._gamestate
 

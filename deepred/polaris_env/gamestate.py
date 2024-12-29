@@ -406,6 +406,13 @@ class GameState:
         return species
 
     @cproperty
+    def opponent_party_max_level(self) -> int:
+        """
+        Maximum level of the pokemons in the opponent party
+        """
+        return max([self._read(addr) for addr in [0xD8C5, 0xD8F1, 0xD91D, 0xD949, 0xD975, 0xD9A1]])
+
+    @cproperty
     def party_pokemons(self) -> List[Pokemon]:
         """
         Party Pokemons as enums.
@@ -825,7 +832,6 @@ class GameState:
 
         return self.pos_x / map_h, self.pos_y / map_w
 
-
     @cproperty
     def ordered_bag_items(self) -> List[BagItem]:
         """
@@ -1057,7 +1063,7 @@ class GameState:
         # cur_uint8_flag_count = round(255 * self.event_flag_count / len(ProgressionFlag))
         # d = cur_uint8_flag_count - visited
         # observed = (255 - d) * np.int32(visited > 0)
-        observed = np.uint8(255 - 255 * np.clip((self.step - visited) / 20_000, 0, 1))
+        observed = np.uint8(255 * np.clip((self.step - visited) / 30_000, 0, 1))
 
         visited_tiles_on_current_map[
         adjust_y: adjust_y + bottom_right_y - top_left_y, adjust_x: adjust_x + bottom_right_x - top_left_x
@@ -1174,23 +1180,23 @@ class GameState:
 
         # Water
         if self.tileset_id == TileSet.VERMILION_PORT:
-            maps[5] = (bottom_left_screen_tiles == 20).astype(np.uint8) * 255
+            maps[5] = (bottom_left_screen_tiles != 20).astype(np.uint8) * 255
         elif self.tileset_id in [TileSet.OVERWORLD, TileSet.FOREST, TileSet.TILESET_5, TileSet.GYM, TileSet.TILESET_13,
                                  TileSet.TILESET_17, TileSet.TILESET_22, TileSet.TILESET_23]:
-            maps[5] = np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48]).astype(np.uint8) * 255
+            maps[5] = np.logical_not(np.isin(bottom_left_screen_tiles, [0x14, 0x32, 0x48])).astype(np.uint8) * 255
 
         if self.tileset_id == TileSet.OVERWORLD:  # is overworld
             # tree
-            maps[1] = (bottom_left_screen_tiles == 61).astype(np.uint8) * 255
+            maps[1] = (bottom_left_screen_tiles != 61).astype(np.uint8) * 255
             # ledge down
-            maps[2] = np.isin(bottom_left_screen_tiles, [54, 55]).astype(np.uint8) * 255
+            maps[2] = np.logical_not(np.isin(bottom_left_screen_tiles, [54, 55])).astype(np.uint8) * 255
             # ledge left
-            maps[3] = (bottom_left_screen_tiles == 39).astype(np.uint8) * 255
+            maps[3] = np.logical_not((bottom_left_screen_tiles != 39)).astype(np.uint8) * 255
             # ledge right
-            maps[4] = np.isin(bottom_left_screen_tiles, [13, 29]).astype(np.uint8) * 255
+            maps[4] = np.logical_not(np.isin(bottom_left_screen_tiles, [13, 29])).astype(np.uint8) * 255
         elif self.tileset_id == TileSet.GYM:
             # tree
-            maps[1] = (bottom_left_screen_tiles == 80).astype(np.uint8) * 255 # 0x50
+            maps[1] = (bottom_left_screen_tiles != 80).astype(np.uint8) * 255 # 0x50
 
         maps[6] = self.visited_tiles
 
@@ -1205,7 +1211,6 @@ class GameState:
         for i in range(self.box_pokemon_count):
             offset = RamLocation.BOX_POKEMON_START + i * DataStructDimension.BOX_POKEMON_STATS
             species = self._read(RamLocation.BOX_POKEMON_SPECIES_START + i)
-            print(species, self.box_pokemon_count)
             level = self._read(offset + 3)
             exp = self._read_triple(offset + 14)
             hp_ev = self._read_double(offset + 17)
@@ -1272,7 +1277,6 @@ class GameState:
         """
         Index of the pokemon with the highest stat sum in the box
         """
-        print(self.box_pokemon_stat_sums, self.party_pokemon_stat_sums)
         return 0 if self.box_pokemon_count == 0 else int(np.argmax(self.box_pokemon_stat_sums))
         
     @cproperty
@@ -1315,6 +1319,13 @@ class GameState:
         Pokemon centers that have been visited
         """
         return self._additional_memory.pokecenter_checkpoints.registered_checkpoints
+
+    @cproperty
+    def visited_pokemon_centers_count(self) -> int:
+        """
+        Count of pokemon centers that have been visited
+        """
+        return sum(self._additional_memory.pokecenter_checkpoints.registered_checkpoints)
 
     @cproperty
     def last_visited_maps(self) -> List[Map]:

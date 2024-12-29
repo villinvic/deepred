@@ -34,6 +34,7 @@ class Goals(NamedTuple):
     blackout: float = 0
     heal: float = 0
     early_termination: float = 0
+    opponent_level: float = 0
     # computed with map-(event flags) hash
     exploration: float = 0
     visited_maps: float = 0
@@ -72,65 +73,39 @@ class PolarisRedRewardFunction:
             self,
             reward_scales: dict | None,
             hash_counts: HashCounts,
-            inital_gamestate: GameState
+            inital_gamestate: GameState,
+            laziness_delta_t: int,
+            laziness_threshold: int,
     ):
         """
         This class takes care of computing rewards.
         :param reward_scales: scales for each goal.
         :param inital_gamestate: initial state of the game to setup the reward function.
+        :param laziness_delta_t: terminates the episode if the number of reward collected in delta_t steps is below the
+            set threshold.
+        :param laziness_threshold: reward amount threshold before the agent is not set as lazy.
         """
-        self.episode_max_party_lvl = -np.inf
-        self.episode_max_event_count = 0
 
         self.scales = Goals() if reward_scales is None else Goals(** reward_scales)
         self.delta_goals = Goals()
 
-        h = hash_function((inital_gamestate.map, inital_gamestate.event_flag_count, inital_gamestate.pos_x, inital_gamestate.pos_y))
         self.total_exploration = 0
+        self.hash_counts = hash_counts
+        self.laziness_threshold = laziness_threshold
+        self._cumulated_rewards_history = [None] * laziness_delta_t
 
         self._cumulated_rewards = Goals()
         self._previous_gamestate = inital_gamestate
-        self.hash_counts = hash_counts
-        self.hash_counts.visit(h)
-        self.visited_hashes = set()
-        self.visited_event_hashes = set()
-        self.visited_maps = {Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_2F, Map.REDS_HOUSE_1F, Map.PALLET_TOWN}
-        
         self._previous_goals = self._extract_goals(inital_gamestate)
 
     def _extract_goals(
             self,
             gamestate: GameState
     ) -> Goals:
-        seen_pokemons = gamestate.species_seen_count
-        party_level = sum(gamestate.party_level)
-        if party_level > self.episode_max_party_lvl:
-            self.episode_max_party_lvl = party_level
 
-        event_count = gamestate.event_flag_count
-        if event_count > self.episode_max_event_count:
-            self.episode_max_event_count = event_count
-            
-        if gamestate.map not in self.visited_maps:
-            self.visited_maps.add(gamestate.map)
-
-        if gamestate.map not in (Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_2F, Map.REDS_HOUSE_1F, Map.PALLET_TOWN):
-            h_all = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
-            h = hash_function((gamestate.map,  gamestate.pos_x, gamestate.pos_y))
-            if h not in self.visited_hashes:
-                self.total_exploration += 0.5
-                self.visited_hashes.add(h)
-            if h_all not in self.visited_event_hashes:
-                self.total_exploration += 1.
-                self.visited_event_hashes.add(h_all)
-
-            # if (gamestate.map not in (Map.PALLET_TOWN, Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F)):
-                #self.total_exploration += self.hash_counts[h]
-                self.hash_counts.visit(h)
-
-        heal = int(
-            self._previous_gamestate.current_checkpoint != gamestate.current_checkpoint
-        )
+        overvisited = int(gamestate._additional_memory.visited_tiles.is_overvisited(gamestate))
+        self.total_exploration = 0.5*(len(gamestate._additional_memory.visited_tiles.coord_map_hashes)
+                                       + len(gamestate._additional_memory.visited_tiles.coord_map_event_hashes)) - overvisited
 
         blackout = int(
             sum(self._previous_gamestate.party_hp) / self._previous_gamestate.party_count <
@@ -143,14 +118,15 @@ class PolarisRedRewardFunction:
 
         self._previous_gamestate = gamestate
         return Goals(
-            seen_pokemons=seen_pokemons,
+            seen_pokemons=gamestate.species_seen_count,
             badges=gamestate.badge_count,
-            experience=self.episode_max_party_lvl,
-            events=self.episode_max_event_count,
+            experience=gamestate._additional_memory.statistics.episode_max_party_lvl_sum,
+            events=gamestate._additional_memory.statistics.episode_max_event_count,
             exploration=self.total_exploration,
             blackout=blackout,
-            heal=heal,
-            visited_maps=len(self.visited_maps)
+            opponent_level=gamestate._additional_memory.statistics.episode_max_opponent_level,
+            heal=gamestate.visited_pokemon_centers_count,
+            visited_maps=len(gamestate._additional_memory.map_history.visited_maps)
         )
 
     def _get_goal_updates(
@@ -169,23 +145,46 @@ class PolarisRedRewardFunction:
         rewards = Goals(
             seen_pokemons=goal_updates.seen_pokemons,
             badges=goal_updates.badges,
-            experience=goal_updates.experience,
+            experience=np.clip(goal_updates.experience, 0, 1),
             events=goal_updates.events,
             exploration=goal_updates.exploration,
             blackout=-np.maximum(0, goal_updates.blackout), # blackout_update = 1 when we blackout, -1 when we respawn.
-            heal = np.maximum(0, goal_updates.heal),  # when we got a new checkpoint
+            opponent_level=goal_updates.opponent_level,
+            heal = goal_updates.heal,  # when we got a new checkpoint
             visited_maps = goal_updates.visited_maps
         )
 
         self._cumulated_rewards = accumulate_goal_stats(rewards, self._cumulated_rewards)
+        self._cumulated_rewards_history.pop(0)
+        self._cumulated_rewards_history.append(_compute_step_reward(self._cumulated_rewards, self.scales))
         self._previous_goals = goals
         return _compute_step_reward(rewards, self.scales)
+
+    def laziness(self) -> float:
+        """
+        :return: 1 if lazy, close to 0 if not lazy.
+        """
+        if self._cumulated_rewards_history[0] is None:
+            return 0
+        dr = self._cumulated_rewards_history[-1] - self._cumulated_rewards_history[0]
+        gap = (dr - self.laziness_threshold) / self.laziness_threshold
+        gap = np.clip(gap, 0, 50)
+        laziness = 1 - gap / 50
+        return laziness
+
+    def is_lazy(self) -> bool:
+        """
+        :return: True if the agent recently did not collect enough rewards.
+        """
+        if self._cumulated_rewards_history[0] is None:
+            return False
+        return self._cumulated_rewards_history[-1] - self._cumulated_rewards_history[0] < self.laziness_threshold
 
     def get_metrics(self) -> dict:
         return {
             "to_pop/visited_hash": self.hash_counts.counts,
             "rewards": self._cumulated_rewards,
-            "party_level_sum": self.episode_max_party_lvl
+            "total_rewards": self._cumulated_rewards_history[-1],
         }
 
 

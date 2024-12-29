@@ -2,6 +2,7 @@ import numpy as np
 
 from deepred.polaris_env.pokemon_red.enums import EventFlag, Map, ProgressionFlag
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
+from deepred.polaris_utils.counting import hash_function
 
 
 class AdditionalMemoryBlock:
@@ -25,6 +26,8 @@ class AdditionalMemoryBlock:
 class VisitedTiles(AdditionalMemoryBlock):
     def __init__(self):
         self.visited_tiles = dict()
+        self.coord_map_hashes = dict()
+        self.coord_map_event_hashes = dict()
 
     def update(
             self,
@@ -33,17 +36,32 @@ class VisitedTiles(AdditionalMemoryBlock):
         """
         Keeps track of tiles previously visited.
         """
+        coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
+        coord_map_hash = hash_function((gamestate.map,  gamestate.pos_x, gamestate.pos_y))
+        if gamestate.map not in (Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F, Map.PALLET_TOWN):
+            if coord_map_hash not in self.coord_map_hashes:
+                self.coord_map_hashes[coord_map_hash] = 0
+            self.coord_map_hashes[coord_map_hash] += 1
+
+            if coord_map_event_hash not in self.coord_map_event_hashes:
+                self.coord_map_event_hashes[coord_map_event_hash] = 0
+            self.coord_map_event_hashes[coord_map_event_hash] += 1
+
         if gamestate.map not in self.visited_tiles:
             map_w, map_h = MapDimensions[gamestate.map].shape
             self.visited_tiles[gamestate.map] = np.ones((map_h, map_w), dtype=np.int32) * -1e8
 
         self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.step
 
+    def is_overvisited(self, gamestate: "GameState") -> bool:
+        coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
+        return self.coord_map_event_hashes.get(coord_map_event_hash, 0) > 100
+
 
     def get(
             self,
             gamestate: "GameState"
-    ):
+    ) -> np.ndarray:
         """
         """
         return self.visited_tiles[gamestate.map]
@@ -111,6 +129,7 @@ class MapHistory(AdditionalMemoryBlock):
 
         :param map_history_length: Length of the history
         """
+        self.visited_maps = {Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F}
         self.map_history_length = map_history_length
         self.map_history = [Map.UNUSED_MAP_69] * map_history_length
 
@@ -118,6 +137,8 @@ class MapHistory(AdditionalMemoryBlock):
             self,
             gamestate: "GameState"
     ):
+        if gamestate.map not in self.visited_maps:
+            self.visited_maps.add(gamestate.map)
         if gamestate.map == self.map_history[-1]:
             return
 
@@ -150,6 +171,24 @@ class GoodPokemonInBoxCache(AdditionalMemoryBlock):
         self.better_pokemon_in_box = party_stat_sums[worst_party_pokemon_index] < box_stat_sums[best_box_pokemon_index]
 
 
+class Statistics(AdditionalMemoryBlock):
+    def __init__(self):
+        self.episode_max_party_lvl_sum = -np.inf
+        self.episode_max_event_count = 0
+        self.episode_max_opponent_level = 5
+
+    def update(
+                self,
+                gamestate: "GameState"
+    ):
+        if self.episode_max_opponent_level < gamestate.opponent_party_max_level:
+            self.episode_max_opponent_level = gamestate.opponent_party_max_level
+        party_level_sum = sum(gamestate.party_level)
+        if party_level_sum > self.episode_max_party_lvl_sum:
+            self.episode_max_party_lvl_sum = party_level_sum
+        if self.episode_max_event_count < gamestate.event_flag_count:
+            self.episode_max_event_count = gamestate.event_flag_count
+
 class AdditionalMemory(AdditionalMemoryBlock):
 
     def __init__(
@@ -169,9 +208,10 @@ class AdditionalMemory(AdditionalMemoryBlock):
         self.map_history = MapHistory(map_history_length)
         self.flag_history = FlagHistory(flag_history_length)
         self.good_pokemon_in_box = GoodPokemonInBoxCache()
+        self.statistics = Statistics()
 
         self.blocks = [self.visited_tiles, self.pokecenter_checkpoints, self.map_history, self.flag_history,
-                       self.good_pokemon_in_box]
+                       self.good_pokemon_in_box, self.statistics]
 
     def update(
             self,
