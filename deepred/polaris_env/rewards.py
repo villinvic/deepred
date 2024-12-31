@@ -38,6 +38,8 @@ class Goals(NamedTuple):
     # computed with map-(event flags) hash
     exploration: float = 0
     visited_maps: float = 0
+    
+    battle_staling: float = 0
 
 
 def _get_goals_delta(
@@ -126,7 +128,8 @@ class PolarisRedRewardFunction:
             blackout=blackout,
             opponent_level=gamestate._additional_memory.statistics.episode_max_opponent_level,
             heal=gamestate.visited_pokemon_centers_count,
-            visited_maps=len(gamestate._additional_memory.map_history.visited_maps)
+            visited_maps=len(gamestate._additional_memory.map_history.visited_maps),
+            battle_staling=int(gamestate._additional_memory.battle_staling_checker.is_battle_staling())
         )
 
     def _get_goal_updates(
@@ -151,7 +154,8 @@ class PolarisRedRewardFunction:
             blackout=-np.maximum(0, goal_updates.blackout), # blackout_update = 1 when we blackout, -1 when we respawn.
             opponent_level=goal_updates.opponent_level,
             heal = goal_updates.heal,  # when we got a new checkpoint
-            visited_maps = goal_updates.visited_maps
+            visited_maps = goal_updates.visited_maps,
+            battle_staling = -goals.battle_staling
         )
 
         self._cumulated_rewards = accumulate_goal_stats(rewards, self._cumulated_rewards)

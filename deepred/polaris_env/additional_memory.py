@@ -143,7 +143,37 @@ class MapHistory(AdditionalMemoryBlock):
 
         self.map_history.pop(0)
         self.map_history.append(gamestate.map)
+        
 
+class BattleStaling(AdditionalMemoryBlock):
+    
+    def __init__(self):
+        """
+        Detects if we are staling in a battle (to avoid blackouts)
+        """
+        self.staling_count = 0
+        self.prev_turn_count = -1
+    
+    def update(
+            self,
+            gamestate: "GameState"
+    ):
+        if not gamestate.is_in_battle:
+            self.reset()
+            return
+        
+        curr_turn = gamestate.battle_turn
+        
+        if curr_turn == self.prev_turn_count:
+            self.staling_count += 1
+        else:
+            self.staling_count = 0
+            
+        self.prev_turn_count = curr_turn
+    
+    def is_battle_staling(self) -> bool:
+        return self.staling_count > 50
+            
 
 class GoodPokemonInBoxCache(AdditionalMemoryBlock):
 
@@ -208,9 +238,10 @@ class AdditionalMemory(AdditionalMemoryBlock):
         self.flag_history = FlagHistory(flag_history_length)
         self.good_pokemon_in_box = GoodPokemonInBoxCache()
         self.statistics = Statistics()
+        self.battle_staling_checker = BattleStaling()
 
         self.blocks = [self.visited_tiles, self.pokecenter_checkpoints, self.map_history, self.flag_history,
-                       self.good_pokemon_in_box, self.statistics]
+                       self.good_pokemon_in_box, self.statistics, self.battle_staling_checker]
 
     def update(
             self,

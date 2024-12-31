@@ -153,6 +153,7 @@ class RamLocation(IntEnum):
     FIELD_MOVE = 0xCD3D
 
     WALKBIKESURF_STATE = 0xD700
+    
 
 
 

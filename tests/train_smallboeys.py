@@ -37,7 +37,7 @@ def cfg():
         env_checkpoint_scoring = {"total_rewards": 1},
         default_savestate = "faster_red_post_parcel_pokeballs.state",
         reward_scales = dict(seen_pokemons=0, experience=1, badges=5, events=2, opponent_level=0,
-                             blackout=1, exploration=0.02, early_termination=5, heal=5, visited_maps=0),
+                             blackout=1, exploration=0.02, early_termination=5, heal=5, visited_maps=0, battle_staling=0.01),
         laziness_delta_t = 2048*5,
         laziness_threshold = 2,
         session_path = "red_tests",

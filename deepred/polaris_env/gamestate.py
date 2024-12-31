@@ -343,6 +343,13 @@ class GameState:
         return self._read(RamLocation.PARTY_MENU_ANIMATION_INDEX)
 
     @cproperty
+    def battle_turn(self) -> int:
+        """
+        :return: Battle turn count
+        """
+        return self._read(RamLocation.BATTLE_TURN)
+
+    @cproperty
     def battle_type(self) -> BattleType:
         """
         :return: type of battle, not in battle, wild, trainer.
@@ -1347,6 +1354,7 @@ class GameState:
         The latest triggered flag events.
         """
         return [self.step - step for step in self._additional_memory.flag_history.stepstamps]
+
 
 
 
