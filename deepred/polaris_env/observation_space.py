@@ -190,34 +190,39 @@ class PixelsObservation(Observation):
             input_array: np.ndarray
     ):
         pixels = self._extractor(gamestate)
-        h, w = self.downscaled_shape[-2:]
-        if pixels.shape == self.stacked_shape:
-            downscaled = pixels
+        shape =  self.downscaled_shape
+        leading_dims = len(shape) - 2
+        h, w = shape[-2:]
+        if leading_dims > 0:
+            input_array[:] = pixels
         else:
-            h_orig, w_orig = pixels.shape
-            h_factor = h_orig // h
-            w_factor = w_orig // w
+            if pixels.shape == self.stacked_shape:
+                downscaled = pixels
+            else:
+                h_orig, w_orig = pixels.shape
+                h_factor = h_orig // h
+                w_factor = w_orig // w
 
-            downscaled = downscale_local_mean(pixels, (h_factor, w_factor)).astype(np.uint8)
-            # downscaled = cv2.resize(
-            #     pixels,
-            #     self.opencv_downscaled_shape,
-            #     interpolation=cv2.INTER_AREA,
-            # )
+                downscaled = downscale_local_mean(pixels, (h_factor, w_factor)).astype(np.uint8)
+                #downscaled = pixels[::h_factor, ::w_factor]
+                # downscaled = cv2.resize(
+                #     pixels,
+                #     self.opencv_downscaled_shape,
+                #     interpolation=cv2.INTER_AREA,
+                # )
 
-        if self.stack_oldest_only:
-            # Here, we only stack the most recent pixels to the oldest one in the stack.
-            # This may be useful to limit input dimensions.
-
-            self._pixel_history[h:] = self._pixel_history[:-h]
-            self._pixel_history[:h] = downscaled
-
-            input_array[h:] = self._pixel_history[-h:]
-            input_array[:h] = downscaled
-
-        else:
             if self.framestack > 1:
-                input_array[h:] = input_array[:-h]
+                if self.stack_oldest_only:
+                    # Here, we only stack the most recent pixels to the oldest one in the stack.
+                    # This may be useful to limit input dimensions.
+
+                    self._pixel_history[h:] = self._pixel_history[:-h]
+                    self._pixel_history[:h] = downscaled
+
+                    input_array[h:] = self._pixel_history[-h:]
+
+                else:
+                    input_array[h:] = input_array[:-h]
             input_array[:h] = downscaled
 
 

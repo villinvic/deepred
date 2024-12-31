@@ -38,14 +38,13 @@ class VisitedTiles(AdditionalMemoryBlock):
         """
         coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
         coord_map_hash = hash_function((gamestate.map,  gamestate.pos_x, gamestate.pos_y))
-        if gamestate.map not in (Map.OAKS_LAB, Map.BLUES_HOUSE, Map.REDS_HOUSE_1F, Map.REDS_HOUSE_2F, Map.PALLET_TOWN):
-            if coord_map_hash not in self.coord_map_hashes:
-                self.coord_map_hashes[coord_map_hash] = 0
-            self.coord_map_hashes[coord_map_hash] += 1
+        if coord_map_hash not in self.coord_map_hashes:
+            self.coord_map_hashes[coord_map_hash] = 0
+        self.coord_map_hashes[coord_map_hash] += 1
 
-            if coord_map_event_hash not in self.coord_map_event_hashes:
-                self.coord_map_event_hashes[coord_map_event_hash] = 0
-            self.coord_map_event_hashes[coord_map_event_hash] += 1
+        if coord_map_event_hash not in self.coord_map_event_hashes:
+            self.coord_map_event_hashes[coord_map_event_hash] = 0
+        self.coord_map_event_hashes[coord_map_event_hash] += 1
 
         if gamestate.map not in self.visited_tiles:
             map_w, map_h = MapDimensions[gamestate.map].shape
@@ -55,7 +54,7 @@ class VisitedTiles(AdditionalMemoryBlock):
 
     def is_overvisited(self, gamestate: "GameState") -> bool:
         coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
-        return self.coord_map_event_hashes.get(coord_map_event_hash, 0) > 100
+        return False #self.coord_map_event_hashes.get(coord_map_event_hash, 0) > 10000
 
 
     def get(

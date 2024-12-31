@@ -21,12 +21,12 @@ def cfg():
 
     env_config = dict(
         game_path = game_path,
-        episode_length = 1024 * 1000 * 30, # 2048 is short, for debugging purposes.
+        episode_length = 2048 * 30000, # 2048 is short, for debugging purposes.
         enable_start = False,
         enable_roll_party = True,
         enable_pass = False,
         downscaled_screen_shape = (72, 80),
-        framestack = 3,
+        framestack = 1,
         stack_oldest_only = False, # maybe True could speed up.
         map_history_length = 15,
         flag_history_length = 15,
@@ -36,10 +36,10 @@ def cfg():
         max_num_checkpoints = 15,
         env_checkpoint_scoring = {"total_rewards": 1},
         default_savestate = "faster_red_post_parcel_pokeballs.state",
-        reward_scales = dict(seen_pokemons=5, experience=5, badges=100, events=20, opponent_level=1,
-                             blackout=0.5, exploration=0.25, early_termination=10, heal=300, visited_maps=0),
+        reward_scales = dict(seen_pokemons=0, experience=1, badges=5, events=2, opponent_level=0,
+                             blackout=1, exploration=0.02, early_termination=5, heal=5, visited_maps=0),
         laziness_delta_t = 2048*5,
-        laziness_threshold = 10,
+        laziness_threshold = 2,
         session_path = "red_tests",
         record = False,
         speed_limit = 2,
@@ -51,7 +51,7 @@ def cfg():
 
     env = PolarisRed.env_id
 
-    num_workers = 126 # the +1 is for the rendering window.
+    num_workers = 128 # the +1 is for the rendering window.
     policy_path = 'polaris.policies.PPO'
     model_path = 'deepred.models.small_boeys'
     policy_class = 'PPO'
@@ -60,9 +60,9 @@ def cfg():
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 512
     max_seq_len = trajectory_length # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 2048 * num_workers
-    n_epochs=1
-    minibatch_size = 512*6 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
+    train_batch_size = 65536
+    n_epochs=3
+    minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
 
     # count-based exploration
@@ -81,15 +81,15 @@ def cfg():
 
         'discount': 0.998,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 5e-3, # encourages exploration
-        'lr': 3e-4, #5e-4
+        'entropy_cost': 1e-2, # encourages exploration
+        'lr': 2e-4, #5e-4
 
         'grad_clip': 0.5,
-        'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
-        'baseline_coeff': 0.5,
-        'initial_kl_coeff': 0.5,
-        'kl_target': 1.,
-        "vf_clip": 10.
+        'ppo_clip': 0.1, # smaller clip coefficient will lead to more conservative updates.
+        'baseline_coeff': 0.25,
+        'initial_kl_coeff': 0.,
+        'kl_target': 0.01,
+        "vf_clip": 0.1
         }
 
     policy_params = [{
@@ -102,7 +102,7 @@ def cfg():
     wandb_logdir = 'wandb_logs'
     report_freq = 1
     episode_metrics_smoothing = 0.95
-    training_metrics_smoothing = 0.8
+    training_metrics_smoothing = 0.5
 
     checkpoint_config = dict(
         checkpoint_frequency=20,
@@ -122,7 +122,7 @@ def main(_config):
     tf.compat.v1.enable_eager_execution()
     gpus = tf.config.experimental.list_physical_devices('GPU')
     for gpu in gpus:
-        tf.config.experimental.set_memory_growth(gpu, False)
+        tf.config.experimental.set_memory_growth(gpu, True)
     from deepred.trainer import SynchronousTrainer
 
     config = ConfigDict(_config)

@@ -1,3 +1,4 @@
+import math
 from typing import Tuple, Any
 
 import numpy as np
@@ -6,13 +7,13 @@ from ml_collections import ConfigDict
 from polaris.experience import SampleBatch
 from polaris.models import BaseModel
 from polaris.models.utils import CategoricalDistribution
+from sonnet import initializers
 
 from deepred.models.modules import Conv2DResidualModule, CategoricalValueHead
 
 import tensorflow as tf
 import sonnet as snt
 
-from deepred.models.tf_utils import AdaptiveMaxPooling2D
 from deepred.polaris_env.pokemon_red.enums import ProgressionFlag, BagItem, Move, Map
 from deepred.polaris_env.pokemon_red.map_warps import NamedWarpIds
 
@@ -46,40 +47,41 @@ class SmallBoeysModel(BaseModel):
 
         self.conv_activation = config.get("conv_activation", tf.nn.relu)
 
-
         self.screen_conv_layers = [
-            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"screen{kernel_size}")
-            for num_ch, kernel_size, stride, padding in [(64, 8, 4, "VALID"), (128, 4, 2, "VALID"), (128, 3, 1, "VALID")]
+            snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"screen{kernel_size}"
+                       )
+            for num_ch, kernel_size, stride, padding in [(32, 8, 2, "VALID"), (64, 4, 2, "VALID"), (64, 3, 2, "VALID")]
         ]
         self.screen_conv_max_pool = tf.keras.layers.MaxPooling2D((3, 1), strides=(3, 1))
 
         self.map_features_conv_layers = [
             snt.Conv2D(num_ch, kernel_size, stride=stride, padding=padding, name=f"map{kernel_size}")
-            for num_ch, kernel_size, stride, padding in [(64, 4, 1, "VALID"), (128, 4, 1, "VALID"), (256, 3, 1, "VALID")]
+            for num_ch, kernel_size, stride, padding in [(32, 4, 1, "VALID"), (64, 3, 1, "VALID"), (64, 2, 1, "VALID")]
         ]
 
+
         self.screen_embedding = snt.nets.MLP([256], activate_final=True, name="screen_embedding")
-        self.map_features_embedding = snt.nets.MLP([512], activate_final=True, name="map_features_embedding")
+        self.map_features_embedding = snt.nets.MLP([256], activate_final=True, name="map_features_embedding")
         self.moves_mlp = snt.nets.MLP([8, 8], activate_final=True, name="moves_mlp")
 
-        self.pokemons_mlp = snt.nets.MLP([32, 32], activate_final=True, name="pokemons_mlp")
-        self.party_head_embedding = snt.nets.MLP([32, 32], activate_final=True, name="party_head_embedding")
-        self.opp_head_embedding = snt.nets.MLP([32, 32], activate_final=True, name="opp_head_embedding")
+        self.pokemons_mlp = snt.nets.MLP([8, 8], activate_final=True, name="pokemons_mlp")
+        self.party_head_embedding = snt.nets.MLP([8, 8], activate_final=True, name="party_head_embedding")
+        self.opp_head_embedding = snt.nets.MLP([8, 8], activate_final=True, name="opp_head_embedding")
 
-        self.items_mlp = snt.nets.MLP([16, 16], activate_final=True, name="items_mlp")
+        self.items_mlp = snt.nets.MLP([4, 4], activate_final=True, name="items_mlp")
 
-        self.events_mlp = snt.nets.MLP([32, 32], activate_final=True, name="events_mlp")
+        self.events_mlp = snt.nets.MLP([4, 4], activate_final=True, name="events_mlp")
 
-        self.maps_mlp = snt.nets.MLP([16, 16], activate_final=True, name="maps_mlp")
+        self.maps_mlp = snt.nets.MLP([4, 4], activate_final=True, name="maps_mlp")
 
         self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True, name="sprite_embedding")
         self.warps_embedding = snt.Embed(len(NamedWarpIds)+1, 8, densify_gradients=True, name="warps_embedding")
         self.moves_embedding = snt.Embed(len(Move) + 1, 8, densify_gradients=True, name="moves_embedding")
         self.types_embedding = snt.Embed(17, 8, densify_gradients=True, name="types_embedding")
         # no pokemon id embedding
-        self.items_embedding = snt.Embed(256, 32, densify_gradients=True, name="bag_items_embedding")
-        self.events_embedding = snt.Embed(len(ProgressionFlag)+1, 16, densify_gradients=True, name="event_embedding")
-        self.maps_embedding = snt.Embed(len(Map)+1, 16, densify_gradients=True, name="maps_embedding")
+        self.items_embedding = snt.Embed(256, 4, densify_gradients=True, name="bag_items_embedding")
+        self.events_embedding = snt.Embed(len(ProgressionFlag)+1, 4, densify_gradients=True, name="event_embedding")
+        self.maps_embedding = snt.Embed(len(Map)+1, 4, densify_gradients=True, name="maps_embedding")
 
         self.final_mlp = snt.nets.MLP([512, 512], activate_final=True, name="final_mlp")
         self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
@@ -106,14 +108,16 @@ class SmallBoeysModel(BaseModel):
     ):
         # The input is of shape (...), we need to add a Batch dimension.
         # we expand  once here as the pixels are in shape (w, h), should be (w, h, 1)
+
         pixels = tf.expand_dims(tf.cast(obs["main_screen"], tf.float32) / 255., axis=-1)
 
         conv_out = self.screen_conv_layers[0](pixels)
         conv_out = self.conv_activation(conv_out)
-        conv_out = self.screen_conv_max_pool(conv_out)
+        #conv_out = self.screen_conv_max_pool(conv_out)
         for conv in self.screen_conv_layers[1:]:
             conv_out = conv(conv_out)
             conv_out = self.conv_activation(conv_out)
+
         conv_out_flat = snt.Flatten(1)(conv_out)
         screen_embed = self.screen_embedding(conv_out_flat)
 
@@ -171,8 +175,8 @@ class SmallBoeysModel(BaseModel):
             additional_ram_info,
             maps_embed,
             events_embed, items_embed, poke_opp_head, party_head_embed,
-            map_features_embed,
-            screen_embed
+            screen_embed,
+            map_features_embed
         ], axis=-1)
         return self.final_mlp(concat)
 
@@ -187,23 +191,23 @@ class SmallBoeysModel(BaseModel):
         pixels = tf.expand_dims(tf.cast(obs["main_screen"], tf.float32) / 255., axis=-1)
 
         shape = tf.shape(pixels)
+
         pixels = tf.reshape(pixels, tf.concat([[-1], shape[2:]], axis=0))
         conv_out = self.screen_conv_layers[0](pixels)
         conv_out = self.conv_activation(conv_out)
-        conv_out = self.screen_conv_max_pool(conv_out)
+        #conv_out = self.screen_conv_max_pool(conv_out)
         for conv in self.screen_conv_layers[1:]:
             conv_out = conv(conv_out)
             conv_out = self.conv_activation(conv_out)
         conv_out_flat = snt.Flatten(1)(conv_out)
-        screen_embed = self.screen_embedding(conv_out_flat)
-        screen_embed = tf.reshape(screen_embed, tf.concat([shape[:2], [-1]], axis=0))
+        conv_out = tf.reshape(conv_out_flat, tf.concat([shape[:2], [-1]], axis=0))
+        screen_embed = self.screen_embedding(conv_out)
 
 
         feature_maps = tf.transpose(tf.cast(obs["feature_maps"], tf.float32) / 255., perm=[0, 1, 3, 4, 2])
         sprite_map = self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64))
         warp_map = self.sprites_embedding(tf.cast(obs["sprite_map"], tf.int64))
         feature_maps = tf.concat([feature_maps, sprite_map, warp_map], axis=-1)
-
         shape = tf.shape(feature_maps)
         feature_maps = tf.reshape(feature_maps, tf.concat([[-1], shape[2:]], axis=0))
         conv_out = self.map_features_conv_layers[0](feature_maps)
@@ -255,11 +259,10 @@ class SmallBoeysModel(BaseModel):
 
         concat = tf.concat([
             additional_ram_info,
-                            maps_embed,
-                           events_embed, items_embed, poke_opp_head,
-                            party_head_embed,
-                            map_features_embed,
-                         screen_embed
+            maps_embed,
+            events_embed, items_embed, poke_opp_head, party_head_embed,
+            screen_embed,
+            map_features_embed
                             ], axis=-1)
         return self.final_mlp(concat)
 
