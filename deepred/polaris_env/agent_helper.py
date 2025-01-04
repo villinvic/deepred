@@ -6,7 +6,8 @@ from pyboy.utils import WindowEvent
 from deepred.polaris_env.game_patching import set_player_money, to_double
 from deepred.polaris_env.gamestate import GameState, get_looking_at_coords
 from deepred.polaris_env.pokemon_red.bag_item_info import BagItemsInfo, BagItemInfo
-from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, BagItem, TileSet, FieldMove
+from deepred.polaris_env.pokemon_red.enums import RamLocation, DataStructDimension, BagItem, TileSet, FieldMove, \
+    WaterTilesets
 from deepred.polaris_env.pokemon_red.pokemon_stats import PokemonStats
 
 
@@ -145,7 +146,7 @@ class AgentHelper:
                 )
 
             while (
-                    money >= item_info.price
+                    money - 500 >= item_info.price
                     and
                     current_bag[item] < MAX_ITEM_COUNT
                     and not bag_full()
@@ -437,8 +438,8 @@ def try_use_surf(
     Attempts at using surf, we need to have the ability to surf, to be standing on the ground
     and to be looking at the right tile.
     """
-    #if not (gamestate.can_use_surf and gamestate.tileset_id in WaterTilesets):
-    #    return False
+    if not (gamestate.can_use_surf and gamestate.tileset_id in WaterTilesets):
+       return False
     if gamestate.walk_bike_surf_state == 2:
         return False
 
@@ -469,7 +470,7 @@ def try_use_surf(
     elif looking_at_tile != 0x14:
         return False
 
-    # Prevent bot from using surf in some places ?
+    # TODO: Prevent bot from using surf in some places ?
 
     use_field_move(FieldMove.SURF, gamestate, step_function)
 
@@ -490,7 +491,7 @@ def try_use_cut(
     trees = gamestate.feature_maps[1]
     x, y = get_looking_at_coords(gamestate)
 
-    if trees[y, x] != 255:
+    if trees[y, x] == 255:
         return False
 
     use_field_move(FieldMove.CUT, gamestate, step_function)

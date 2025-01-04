@@ -11,7 +11,7 @@ def to_bcd(amount):
     :param amount: amount to convert into bcd
     :return: the bcd amount.
     """
-    return ((amount // 10) << 4) + (amount % 10)
+    return ((amount // 10) << 4) | (amount % 10)
 
 def to_double(amount):
     """
@@ -40,6 +40,8 @@ def set_bit(
     """
     return byte | (1<<bit)
 
+
+
 def set_player_money(
         ram,
         amount: int,
@@ -47,10 +49,15 @@ def set_player_money(
     """
     Sets the player money to the specified amount
     """
-    amount = np.clip(amount, 0, 999999)
-    ram[RamLocation.MONEY3] = to_bcd(amount) // 10000
-    ram[RamLocation.MONEY2] = to_bcd((amount % 10000) // 100)
-    ram[RamLocation.MONEY1] = to_bcd(amount % 100)
+    value = np.clip(amount, 0, 999999)
+
+    hundreds = (value // 10000) % 100  # Extract first two digits
+    tens = (value // 100) % 100  # Extract next two digits
+    ones = value % 100  # Extract last two digits
+
+    ram[RamLocation.MONEY3] = to_bcd(hundreds)
+    ram[RamLocation.MONEY2] = to_bcd(tens)
+    ram[RamLocation.MONEY1] = to_bcd(ones)
 
 
 def out_of_cash_safari_patch(

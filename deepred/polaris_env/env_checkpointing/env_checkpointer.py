@@ -23,7 +23,7 @@ class EnvCheckpointer:
             self,
             output_dir: Path,
             checkpoint_identifiers: Tuple,
-            max_num_checkpoints: int = 15,
+            max_num_savestates_per_checkpoint: int = 15,
             initial_checkpoint_id: str | None = None,
     ):
         """
@@ -31,12 +31,12 @@ class EnvCheckpointer:
         identifiers).
         :param output_dir: path used by the console.
         :param checkpoint_identifiers: tuple of gamestate attributes, e.g. ("map", "badges")
-        :param max_num_checkpoints: maximum number of checkpoints to keep per checkpoint id.
+        :param max_num_savestates_per_checkpoint: maximum number of checkpoints to keep per checkpoint id.
         """
         self.path = output_dir / "checkpoints"
         self.checkpoint_identifiers = checkpoint_identifiers
         self.checkpoints_created_this_episode = {initial_checkpoint_id}
-        self.max_num_checkpoints = max_num_checkpoints
+        self.max_num_savestates_per_checkpoint = max_num_savestates_per_checkpoint
         self.path.mkdir(exist_ok=True)
 
 
@@ -77,7 +77,7 @@ class EnvCheckpointer:
                 ckpt_id,
             ).save(
                 self.path,
-                self.max_num_checkpoints,
+                self.max_num_savestates_per_checkpoint,
             )
 
 

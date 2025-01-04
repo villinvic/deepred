@@ -28,6 +28,9 @@ class VisitedTiles(AdditionalMemoryBlock):
         self.visited_tiles = dict()
         self.coord_map_hashes = dict()
         self.coord_map_event_hashes = dict()
+        self.prev_x = None
+        self.prev_y = None
+        self.dpos = (0., 0.)
 
     def update(
             self,
@@ -36,8 +39,9 @@ class VisitedTiles(AdditionalMemoryBlock):
         """
         Keeps track of tiles previously visited.
         """
-        coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
-        coord_map_hash = hash_function((gamestate.map,  gamestate.pos_x, gamestate.pos_y))
+
+        coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count, gamestate.pos_x, gamestate.pos_y))
+        coord_map_hash = hash_function((gamestate.map, gamestate.pos_x, gamestate.pos_y))
         if coord_map_hash not in self.coord_map_hashes:
             self.coord_map_hashes[coord_map_hash] = 0
         self.coord_map_hashes[coord_map_hash] += 1
@@ -48,9 +52,26 @@ class VisitedTiles(AdditionalMemoryBlock):
 
         if gamestate.map not in self.visited_tiles:
             map_w, map_h = MapDimensions[gamestate.map].shape
-            self.visited_tiles[gamestate.map] = np.ones((map_h, map_w), dtype=np.int32) * -1e8
+            self.visited_tiles[gamestate.map] = np.zeros((map_h, map_w), dtype=np.int32)
+            #self.visited_tiles[gamestate.map] = np.ones((map_h, map_w), dtype=np.int32) * -1e8
 
-        self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.step
+        #self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.step
+        self.visited_tiles[gamestate.map][gamestate.pos_y, gamestate.pos_x] = gamestate.event_flag_count
+
+        if not (self.prev_y is None or self.prev_x is None):
+            dx = np.clip(gamestate.pos_x - self.prev_x, -1., 1.)
+            dy = np.clip(gamestate.pos_y - self.prev_y, -1., 1.)
+
+        else:
+            dx = 0
+            dy = 0
+
+        self.dpos = (dx, dy)
+        self.prev_y = gamestate.pos_y
+        self.prev_x = gamestate.pos_x
+
+
+
 
     def is_overvisited(self, gamestate: "GameState") -> bool:
         coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
@@ -143,17 +164,17 @@ class MapHistory(AdditionalMemoryBlock):
 
         self.map_history.pop(0)
         self.map_history.append(gamestate.map)
-        
+
 
 class BattleStaling(AdditionalMemoryBlock):
-    
+
     def __init__(self):
         """
         Detects if we are staling in a battle (to avoid blackouts)
         """
         self.staling_count = 0
         self.prev_turn_count = -1
-    
+
     def update(
             self,
             gamestate: "GameState"
@@ -161,19 +182,19 @@ class BattleStaling(AdditionalMemoryBlock):
         if not gamestate.is_in_battle:
             self.reset()
             return
-        
+
         curr_turn = gamestate.battle_turn
-        
+
         if curr_turn == self.prev_turn_count:
             self.staling_count += 1
         else:
             self.staling_count = 0
-            
+
         self.prev_turn_count = curr_turn
-    
+
     def is_battle_staling(self) -> bool:
-        return self.staling_count > 50
-            
+        return self.staling_count > 300
+
 
 class GoodPokemonInBoxCache(AdditionalMemoryBlock):
 
@@ -203,6 +224,7 @@ class GoodPokemonInBoxCache(AdditionalMemoryBlock):
 class Statistics(AdditionalMemoryBlock):
     def __init__(self):
         self.episode_max_party_lvl_sum = -np.inf
+        self.episode_party_lvl_sum_no_lead = -np.inf
         self.episode_max_event_count = 0
         self.episode_max_opponent_level = 5
 
@@ -215,6 +237,16 @@ class Statistics(AdditionalMemoryBlock):
         party_level_sum = sum(gamestate.party_level)
         if party_level_sum > self.episode_max_party_lvl_sum:
             self.episode_max_party_lvl_sum = party_level_sum
+
+        # if solo party, say min level is 0
+        party_lead = np.argmax(gamestate.party_level)
+
+        party_lvl_sum_no_lead = np.sum(np.delete(gamestate.party_level, party_lead))
+        if not hasattr(self, "episode_party_lvl_sum_no_lead"):
+            self.episode_party_lvl_sum_no_lead = 0
+
+        if party_lvl_sum_no_lead > self.episode_party_lvl_sum_no_lead:
+            self.episode_party_lvl_sum_no_lead = party_lvl_sum_no_lead
         if self.episode_max_event_count < gamestate.event_flag_count:
             self.episode_max_event_count = gamestate.event_flag_count
 

@@ -87,6 +87,7 @@ class SynchronousTrainer(Checkpointable):
         self.ckpt_manager = EnvCheckpointManager(
             temperature=config.env_checkpoint_temperature,
             score_lr=config.env_checkpoint_score_lr,
+            min_save_states=config.min_save_states,
             epsilon=config.env_checkpoint_epsilon,
             checkpoint_path=config.env_checkpoint_path,
         )

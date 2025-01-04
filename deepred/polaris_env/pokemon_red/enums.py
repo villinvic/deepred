@@ -19,7 +19,7 @@ class RamLocation(IntEnum):
     PARTY_0_MOVE1_PP = 0xD189
     PARTY_0_MOVE2_PP = 0xD18A
     PARTY_0_MOVE3_PP = 0xD18B
-    PARTY_SENT_OUT = 0xCC35
+    PARTY_SENT_OUT = 0xCC35 # swapping pos
     OPPONENT_PARTY_COUNT = 0xD89C
     OPPONENT_POKEMON_0_SPECIES = 0xD8A4
     OPPONENT_POKEMON_0_TYPE0 = 0xD8A9
@@ -45,7 +45,6 @@ class RamLocation(IntEnum):
     WILD_POKEMON_MOVE2_PP = 0xD000
     WILD_POKEMON_MOVE3_PP = 0xD001
     BATTLE_MENU_STATE = 0xD07D # equals to 0x04 when swapping
-    POKEMON_SWAPPING_POS = 0xCC35
 
     PARTY_NICKNAMES_START = 0xD2B5
     MONEY3 = 0xD347
@@ -153,9 +152,9 @@ class RamLocation(IntEnum):
     FIELD_MOVE = 0xCD3D
 
     WALKBIKESURF_STATE = 0xD700
-    
 
-
+    PLAYER_MODIFIER_START = 0xCD1A
+    OPP_MODIFIER_START = 0xCD2E
 
 
     # def __add__(self, other: Union[Enum, int]):
@@ -424,6 +423,54 @@ class BagItem(IntEnum):
     TM_TRI_ATTACK       = 0xF9
     TM_SUBSTITUTE       = 0xFA
     NO_ITEM = 0xFF
+
+
+class PokemonType(IntEnum):
+
+    NORMAL       = 0x00
+    FIGHTING     = 0x01
+    FLYING       = 0x02
+    POISON       = 0x03
+    GROUND       = 0x04
+    ROCK         = 0x05
+    BIRD         = 0x06 # unused
+    BUG          = 0x07
+    GHOST        = 0x08
+
+    FIRE         = 0x14
+    WATER        = 0x15
+    GRASS        = 0x16
+    ELECTRIC     = 0x17
+    PSYCHIC_TYPE = 0x18
+    ICE          = 0x19
+    DRAGON       = 0x1A
+    NO_TYPE      = 0x1B
+
+    def fix(self) -> "FixedPokemonType":
+        value = self._value_
+        if value >= 9:
+            value -= 11
+        return FixedPokemonType(value)
+
+
+class FixedPokemonType(IntEnum):
+    NORMAL       = 0x00
+    FIGHTING     = 0x01
+    FLYING       = 0x02
+    POISON       = 0x03
+    GROUND       = 0x04
+    ROCK         = 0x05
+    BIRD         = 0x06 # unused
+    BUG          = 0x07
+    GHOST        = 0x08
+    FIRE         = 0x09
+    WATER        = 0x0A
+    GRASS        = 0x0B
+    ELECTRIC     = 0x0C
+    PSYCHIC_TYPE = 0x0D
+    ICE          = 0x0E
+    DRAGON       = 0x0F
+    NO_TYPE      = 0x10
 
 
 class Pokemon(IntEnum):
@@ -1040,7 +1087,7 @@ class Map(IntEnum):
     UNKNOWN                        = 0xFF
 
 
-class ProgressionFlag(Enum):
+class ProgressionFlag(IntEnum):
     EVENT_FOLLOWED_OAK_INTO_LAB          = 0x000 # (D747, bit 0)
     #HALL_OF_FAME_DEX_RATING              = 0x003 # (D747, bit 3)
     #PALLET_AFTER_GETTING_POKEBALLS       = 0x006 # (D747, bit 6)
@@ -1543,7 +1590,7 @@ class ProgressionFlag(Enum):
     BEAT_ARTICUNO                        = 0x9DA # (D882, bit 2)
 
 
-class EventFlag(Enum):
+class EventFlag(IntEnum):
     # TODO: we can curate the events and only care about the most relevant ones. By default, we have 502 events.
     #       - We want the agent to progress into the game
     #           -> typically, activating flags should be an indicator of your progress

@@ -52,7 +52,7 @@ class PolarisRed(PolarisEnv):
             flag_history_length: int = 10,
             enabled_patches: Tuple[str] = (),
             checkpoint_identifiers: Tuple[str] = ("map",),
-            max_num_checkpoints: int = 15,
+            max_num_savestates_per_checkpoint: int = 15,
             env_checkpoint_scoring: dict = {},
             session_path: str = "red_tests",
             render: bool = True,
@@ -80,15 +80,15 @@ class PolarisRed(PolarisEnv):
             game_path=game_path,
             render=self.render,
             speed_limit=speed_limit,
-            record=record,
-            record_skipped_frames=record_skipped_frame,
+            record=record and env_index == 0,
+            record_skipped_frames=record_skipped_frame and env_index == 0,
             output_dir=self.session_path / Path(f"console_{self.env_index}"),
             default_savestate=default_savestate,
             map_history_length = map_history_length,
             flag_history_length = flag_history_length,
             enabled_patches=enabled_patches,
             checkpoint_identifiers=checkpoint_identifiers,
-            max_num_checkpoints=max_num_checkpoints,
+            max_num_savestates_per_checkpoint=max_num_savestates_per_checkpoint,
             **config
         )
         # We perform a reset + tick to get the gamestate.

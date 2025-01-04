@@ -13,6 +13,7 @@ class EnvCheckpointManager:
             self,
             temperature: float,
             score_lr: float,
+            min_save_states: int,
             epsilon: float,
             checkpoint_path: Path,
     ):
@@ -20,11 +21,13 @@ class EnvCheckpointManager:
         Utility class that generates a distribution over checkpoints for the agent.
         :param temperature: annealing factor for the softmax.
         :param score_lr: speed at which the scores are updated (EMA learning rate).
+        :param min_save_states: minimum amount of savestates for a given checkpoint before sampling the checkpoint
         :param epsilon: minimum probability of picking any checkpoint.
         :param checkpoint_path: Path to the checkpoint dirs.
         """
         self.temperature = temperature
         self.lr = score_lr
+        self.min_save_states = min_save_states
         self.epsilon = epsilon
         self.path = checkpoint_path
         self.scores = {}
@@ -62,16 +65,22 @@ class EnvCheckpointManager:
         for subdir in self.path.iterdir():
             if subdir.is_file():
                 continue
+            num_ckpts = sum(1 for file in subdir.iterdir() if file.is_file())
             ckpt_id = subdir.name
+
+            if num_ckpts < self.min_save_states:
+                # not enough savestates to initialise the checkpoint
+                return
 
             if ckpt_id not in self.scores:
                 # if no checkpoint is currently registered, initialise at a default value (0)
                 if len(self.scores) == 0:
                     self.scores[ckpt_id] = 0
-                # otherwise initialise at the current maximum score achieved by other checkpoints.
+                # otherwise initialise at the current min score achieved by other checkpoints. (to introduce the new
+                # checkpoint smoothly)
                 else:
-                    max_score = np.max(list(self.scores.values()))
-                    self.scores[ckpt_id] = max_score
+                    min_score = np.min(list(self.scores.values()))
+                    self.scores[ckpt_id] = min_score
 
     def update_scores(
             self,
@@ -122,6 +131,7 @@ class EnvCheckpointSampler:
         ckpt_id = self.ckpt_ids[ckpt_num]
         checkpoint = EnvCheckpoint()
         checkpoint.load(self.path, ckpt_id)
+        print(ckpt_num, ckpt_id)
         return ckpt_id, ckpt_num, checkpoint
 
 

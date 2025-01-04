@@ -14,10 +14,8 @@ class PolarisRedMetrics:
         self.metrics = defaultdict(float)
 
         # keeps track of how many steps we stay on each map-(event flags) pair
-        self.visitated_maps = set()
-        self.items_bought_in_mart = 0
         self.items_used_in_battle = 0
-        self.items_tossed = 0 # is there cases where the player has to give an item ?
+        self.shopping = 0
 
         self._prev_gamestate : Union[None, GameState] = None
 
@@ -27,16 +25,12 @@ class PolarisRedMetrics:
             gamestate: GameState,
     ):
         if self._prev_gamestate is not None:
-
-            self.visitated_maps.add(gamestate.map)
             total_items_delta = sum(gamestate.bag_items.values()) - sum(self._prev_gamestate.bag_items.values())
-            if total_items_delta != 0 and gamestate.is_in_battle or gamestate.is_at_pokemart:
-                if total_items_delta > 0:
-                    self.items_bought_in_mart += total_items_delta
-                elif total_items_delta < 0:
-                    self.items_used_in_battle += total_items_delta
-            elif total_items_delta < 0:
-                self.items_tossed += total_items_delta
+            if total_items_delta != 0:
+                if gamestate.is_in_battle:
+                    self.items_used_in_battle += 1
+                elif gamestate.is_at_pokemart:
+                    self.shopping += 1
 
 
         self._prev_gamestate = gamestate
@@ -54,11 +48,13 @@ class PolarisRedMetrics:
                 pokemons[pokemon.name] = 0
 
         return {
-            "num_visited_maps": len(self.visitated_maps),
-            #"visited_maps": self.visitated_maps, # sets are not supported as metrics.
+            "shopping": self.shopping,
+            "num_visited_maps": len(final_gamestate._additional_memory.map_history.visited_maps),
             "items_used_in_battle": self.items_used_in_battle,
-            "items_bought_in_mart": self.items_bought_in_mart,
             "party_pokemons": np.array(pokemons), # pass a numpy array to interpret this as a barplot
+            "party_count": final_gamestate.party_count,  # pass a numpy array to interpret this as a barplot
+            "party_level_min": np.min(final_gamestate.party_level),  # pass a numpy array to interpret this as a barplot
+
             "money": final_gamestate.player_money,
             "num_triggered_flags": np.sum(final_gamestate.event_flags)
         }

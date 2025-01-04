@@ -74,20 +74,20 @@ class EnvCheckpoint:
     def save(
             self,
             path: Path,
-            max_num_checkpoints: int = 15,
+            max_num_savestates_per_checkpoint: int = 15,
     ):
         """
         Save the checkpoint to a file.
 
         :param path: Path to the folder where the checkpoint will be saved.
-        :param max_num_checkpoints: Maximum number of checkpoints with the same checkpoint id.
+        :param max_num_savestates_per_checkpoint: Maximum number of checkpoints with the same checkpoint id.
         """
         path = path / self.ckpt_id
         path.mkdir(exist_ok=True)
         with open("ckpt.lock", "w+") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
             try:
-                path = roll_checkpoints(path, max_num_checkpoints)
+                path = roll_checkpoints(path, max_num_savestates_per_checkpoint)
                 data = {
                     'additional_memory': self.additional_memory,
                     'savestate': self.savestate,

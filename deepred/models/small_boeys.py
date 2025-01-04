@@ -9,7 +9,7 @@ from polaris.models import BaseModel
 from polaris.models.utils import CategoricalDistribution
 from sonnet import initializers
 
-from deepred.models.modules import Conv2DResidualModule, CategoricalValueHead
+from deepred.models.modules import Conv2DResidualModule, CategoricalValueHead, ContextualAttentionPooling
 
 import tensorflow as tf
 import sonnet as snt
@@ -44,6 +44,12 @@ class SmallBoeysModel(BaseModel):
             learning_rate=config.lr,
             epsilon=1e-5,
         )
+        # self.optimiser = snt.optimizers.RMSProp(
+        #     learning_rate=config.lr,
+        #     epsilon=1e-5,
+        #     decay=0.99,
+        #     momentum=0.,
+        # )
 
         self.conv_activation = config.get("conv_activation", tf.nn.relu)
 
@@ -60,43 +66,43 @@ class SmallBoeysModel(BaseModel):
         ]
 
 
-        self.screen_embedding = snt.nets.MLP([256], activate_final=True, name="screen_embedding")
-        self.map_features_embedding = snt.nets.MLP([256], activate_final=True, name="map_features_embedding")
-        self.moves_mlp = snt.nets.MLP([8, 8], activate_final=True, name="moves_mlp")
+        self.screen_embedding = snt.nets.MLP([512], activate_final=True, name="screen_embedding")
+        self.map_features_embedding = snt.nets.MLP([512], activate_final=True, name="map_features_embedding")
 
-        self.pokemons_mlp = snt.nets.MLP([8, 8], activate_final=True, name="pokemons_mlp")
-        self.party_head_embedding = snt.nets.MLP([8, 8], activate_final=True, name="party_head_embedding")
-        self.opp_head_embedding = snt.nets.MLP([8, 8], activate_final=True, name="opp_head_embedding")
+        self.move_mlp = snt.nets.MLP([32, 32], activate_final=True, name="move_mlp")
+        self.context_mlp = snt.nets.MLP([32], activate_final=True, name="context_mlp")
 
-        self.items_mlp = snt.nets.MLP([4, 4], activate_final=True, name="items_mlp")
+        self.pokemon_mlp = snt.nets.MLP([64], activate_final=True, name="pokemon_mlp")
 
-        self.events_mlp = snt.nets.MLP([4, 4], activate_final=True, name="events_mlp")
+        self.party_attention = ContextualAttentionPooling(embed_dim=64)
 
-        self.maps_mlp = snt.nets.MLP([4, 4], activate_final=True, name="maps_mlp")
+        self.move_attention = ContextualAttentionPooling(embed_dim=32)
+
+
+        self.items_mlp = snt.nets.MLP([8, 8], activate_final=True, name="items_mlp")
+        self.events_mlp = snt.nets.MLP([32, 32], activate_final=True, name="events_mlp")
 
         self.sprites_embedding = snt.Embed(390, 8, densify_gradients=True, name="sprite_embedding")
         self.warps_embedding = snt.Embed(len(NamedWarpIds)+1, 8, densify_gradients=True, name="warps_embedding")
-        self.moves_embedding = snt.Embed(len(Move) + 1, 8, densify_gradients=True, name="moves_embedding")
+        self.moves_embedding = snt.Embed(len(Move) + 1, 16, densify_gradients=True, name="moves_embedding")
         self.types_embedding = snt.Embed(17, 8, densify_gradients=True, name="types_embedding")
         # no pokemon id embedding
-        self.items_embedding = snt.Embed(256, 4, densify_gradients=True, name="bag_items_embedding")
-        self.events_embedding = snt.Embed(len(ProgressionFlag)+1, 4, densify_gradients=True, name="event_embedding")
-        self.maps_embedding = snt.Embed(len(Map)+1, 4, densify_gradients=True, name="maps_embedding")
+        self.items_embedding = snt.Embed(256, 8, densify_gradients=True, name="bag_items_embedding")
+        self.events_embedding = snt.Embed(len(ProgressionFlag)+1, 32, densify_gradients=True, name="event_embedding")
+        self.maps_embedding = snt.Embed(len(Map)+1, 32, densify_gradients=True, name="maps_embedding")
 
         self.final_mlp = snt.nets.MLP([512, 512], activate_final=True, name="final_mlp")
         self.policy_head = snt.Linear(self.action_space.n, name="policy_head")
-        self._value_logits = None
         self.value_head = snt.Linear(1, name="value_head")
 
-        # num_value_bins = config.get("num_value_bins", [256])
-        # value_bounds = config.get("value_bounds", (-5., 5.))
+        # num_value_bins = config.get("num_value_bins", 75)
+        # value_bounds = config.get("value_bounds", (-10., 30.))
         # self.value_head = CategoricalValueHead(
         #     num_bins=num_value_bins,
-        #
+        #     value_bounds=value_bounds,
+        #     smoothing_ratio=0.75
         # )
 
-        # TODO: Care
-        #       - add mask > 0 for pps
 
 
     def single_input(
@@ -134,24 +140,57 @@ class SmallBoeysModel(BaseModel):
         conv_out_flat = snt.Flatten(1)(conv_out)
         map_features_embed = self.map_features_embedding(conv_out_flat)
 
-        moves = self.moves_embedding(tf.cast(obs["pokemon_move_ids"], tf.int64)) # (e,)
-        pps = tf.expand_dims(obs["pokemon_move_pps"], axis=-1) # (1, 4,)
-        moves_embed = tf.concat([moves, pps], axis=-1)
-        moves_embed = self.moves_mlp(moves_embed)
+        in_battle_mask = tf.convert_to_tensor(obs["is_in_battle"], dtype=tf.float32)
+
+        # sent out party embed
+        moves = self.moves_embedding(tf.cast(obs["sent_out_party_move_ids"], tf.int64))
+        pps = tf.expand_dims(obs["sent_out_party_pps"], axis=-1)
+        pps_mask = tf.cast(pps > 0, dtype=tf.float32)
+        move_index_one_hots = tf.expand_dims(tf.eye(4, dtype=tf.float32), axis=0)
+        moves_embed = self.move_mlp(tf.concat([moves, pps, pps_mask], axis=-1))
+        sent_out_indexed_moves_embed = tf.concat([moves_embed, move_index_one_hots], axis=-1)
         moves_embed = tf.reduce_max(moves_embed, axis=-2)
 
-        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["pokemon_type_ids"], tf.int64)), axis=-2) # (e,)
-        stats = obs["pokemon_stats"]
-        pokemons_info = tf.concat([moves_embed, types, stats], axis=-1)
-        pokemons_embed = self.pokemons_mlp(pokemons_info)
+        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["sent_out_party_type_ids"], tf.int64)), axis=-2)  # (e,)
+        attributes = obs["sent_out_party_attributes"]
+        sent_out_party_info = self.pokemon_mlp(tf.concat([moves_embed, types, attributes], axis=-1))
 
-        party_pokemon_embed = pokemons_embed[:, :6, :]
-        party_head_embed = self.party_head_embedding(party_pokemon_embed)
-        party_head_embed = tf.reduce_max(party_head_embed, axis=-2)
+        # sent out opp embed
+        moves = self.moves_embedding(tf.cast(obs["sent_out_opp_move_ids"], tf.int64))
+        pps = tf.expand_dims(obs["sent_out_opp_pps"], axis=-1)
+        pps_mask = tf.cast(pps > 0, dtype=tf.float32)
+        moves_embed = self.move_mlp(tf.concat([moves, pps, pps_mask], axis=-1))
+        moves_embed = tf.reduce_max(moves_embed, axis=-2)
+        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["sent_out_opp_type_ids"], tf.int64)), axis=-2)  # (e,)
+        attributes = obs["sent_out_opp_attributes"]
+        sent_out_opp_info = self.pokemon_mlp(tf.concat([moves_embed, types, attributes], axis=-1))
 
-        opp_pokemon_embed = pokemons_embed[:, 6:, :]
-        poke_opp_head = self.opp_head_embedding(opp_pokemon_embed)
-        poke_opp_head = tf.reduce_max(poke_opp_head, axis=-2)
+        sent_out_opp_info = sent_out_opp_info * in_battle_mask
+
+        context = self.context_mlp(tf.concat([sent_out_party_info, sent_out_opp_info], axis=-1))
+
+
+        attended_moves = self.move_attention(
+            query=context,
+            key_value=sent_out_indexed_moves_embed,
+        )
+
+        # party pokemon embedding
+        moves = self.moves_embedding(tf.cast(obs["party_move_ids"], tf.int64))
+        pps = tf.expand_dims(obs["party_pps"], axis=-1)
+        pps_mask = tf.cast(pps > 0, dtype=tf.float32)
+        moves_embed = self.move_mlp(tf.concat([moves, pps, pps_mask], axis=-1))
+        moves_embed = tf.reduce_max(moves_embed, axis=-2)
+
+        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["party_type_ids"], tf.int64)), axis=-2)  # (e,)
+        attributes = obs["party_attributes"]
+        party_info = tf.concat([moves_embed, types, attributes], axis=-1)
+        party_embed = self.pokemon_mlp(party_info)
+
+        attended_party = self.party_attention(
+            query=context,
+            key_value=party_embed,
+        )
 
         items = self.items_embedding(tf.cast(obs['item_ids'], tf.int64))
         item_quantities = tf.expand_dims(obs['item_quantities'], axis=-1)
@@ -160,24 +199,28 @@ class SmallBoeysModel(BaseModel):
         items_embed = tf.reduce_max(items_embed, axis=-2)
 
         events = self.events_embedding(tf.cast(obs['recent_event_ids'], tf.int64))
-        events_age = tf.expand_dims(obs['recent_event_ids_age'], axis=-1)
-        events_info = tf.concat([events, events_age], axis=-1)
-        events_embed = self.events_mlp(events_info)
-        events_embed = tf.reduce_max(events_embed, axis=-2)
+        # events_age = tf.expand_dims(obs['recent_event_ids_age'], axis=-1)
+        # events_info = tf.concat([events, events_age], axis=-1)
+        # events_embed = self.events_mlp(events_info)
+        events_embed = tf.reduce_max(events, axis=-2)
 
         maps = self.maps_embedding(tf.cast(obs['map_ids'], tf.int64))
-        map_features = self.maps_mlp(maps)
-        maps_embed = tf.reduce_max(map_features, axis=-2)
+        maps_embed = tf.reduce_max(maps, axis=-2)
 
         additional_ram_info = obs["ram"]
 
         concat = tf.concat([
-            additional_ram_info,
             maps_embed,
-            events_embed, items_embed, poke_opp_head, party_head_embed,
+            events_embed,
+            map_features_embed,
             screen_embed,
-            map_features_embed
+            items_embed,
+            attended_moves,
+            context,
+            attended_party,
+            additional_ram_info,
         ], axis=-1)
+
         return self.final_mlp(concat)
 
     def batch_input(
@@ -219,25 +262,59 @@ class SmallBoeysModel(BaseModel):
         map_features_embed = self.map_features_embedding(conv_out_flat)
         map_features_embed = tf.reshape(map_features_embed, tf.concat([shape[:2], [-1]], axis=0))
 
+        in_battle_mask = tf.cast(obs["is_in_battle"], dtype=tf.float32)
 
-        moves = self.moves_embedding(tf.cast(obs["pokemon_move_ids"], tf.int64))
-        pps = tf.expand_dims(obs["pokemon_move_pps"], axis=-1)
-        moves_embed = tf.concat([moves, pps], axis=-1)
-        moves_embed = self.moves_mlp(moves_embed)
+        # sent out party embed
+        moves = self.moves_embedding(tf.cast(obs["sent_out_party_move_ids"], tf.int64))
+        pps = tf.expand_dims(obs["sent_out_party_pps"], axis=-1)
+        pps_mask = tf.cast(pps > 0, dtype=tf.float32)
+        move_index_one_hots = tf.expand_dims(tf.eye(4, dtype=tf.float32), axis=0)
+        move_index_one_hots = tf.tile(tf.expand_dims(move_index_one_hots, axis=0), tf.concat([shape[:2], [1, 1]], axis=0))
+
+        moves_embed = self.move_mlp(tf.concat([moves, pps, pps_mask], axis=-1))
+        sent_out_indexed_moves_embed = tf.concat([moves_embed, move_index_one_hots], axis=-1)
         moves_embed = tf.reduce_max(moves_embed, axis=-2)
 
-        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["pokemon_type_ids"], tf.int64)), axis=-2)
-        stats = obs["pokemon_stats"]
-        pokemons_info = tf.concat([moves_embed, types, stats], axis=-1)
-        pokemons_embed = self.pokemons_mlp(pokemons_info)
 
-        party_pokemon_embed = pokemons_embed[:, :, :6, :]
-        party_head_embed = self.party_head_embedding(party_pokemon_embed)
-        party_head_embed = tf.reduce_max(party_head_embed, axis=-2)
+        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["sent_out_party_type_ids"], tf.int64)), axis=-2)  # (e,)
+        attributes = obs["sent_out_party_attributes"]
+        sent_out_party_info = self.pokemon_mlp(tf.concat([moves_embed, types, attributes], axis=-1))
 
-        opp_pokemon_embed = pokemons_embed[:, :, 6:, :]
-        poke_opp_head = self.opp_head_embedding(opp_pokemon_embed)
-        poke_opp_head = tf.reduce_max(poke_opp_head, axis=-2)
+        # sent out opp embed
+        moves = self.moves_embedding(tf.cast(obs["sent_out_opp_move_ids"], tf.int64))
+        pps = tf.expand_dims(obs["sent_out_opp_pps"], axis=-1)
+        pps_mask = tf.cast(pps > 0, dtype=tf.float32)
+        moves_embed = self.move_mlp(tf.concat([moves, pps, pps_mask], axis=-1))
+        moves_embed = tf.reduce_max(moves_embed, axis=-2)
+        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["sent_out_opp_type_ids"], tf.int64)), axis=-2)  # (e,)
+        attributes = obs["sent_out_opp_attributes"]
+        sent_out_opp_info = self.pokemon_mlp(tf.concat([moves_embed, types, attributes], axis=-1))
+
+        sent_out_opp_info = sent_out_opp_info * in_battle_mask
+
+        context = self.context_mlp(tf.concat([sent_out_party_info, sent_out_opp_info], axis=-1))
+
+        attended_moves = self.move_attention(
+            query=context,
+            key_value=sent_out_indexed_moves_embed,
+        )
+
+        # party pokemon embedding
+        moves = self.moves_embedding(tf.cast(obs["party_move_ids"], tf.int64))
+        pps = tf.expand_dims(obs["party_pps"], axis=-1)
+        pps_mask = tf.cast(pps > 0, dtype=tf.float32)
+        moves_embed = self.move_mlp(tf.concat([moves, pps, pps_mask], axis=-1))
+        moves_embed = tf.reduce_max(moves_embed, axis=-2)
+
+        types = tf.reduce_sum(self.types_embedding(tf.cast(obs["party_type_ids"], tf.int64)), axis=-2)  # (e,)
+        attributes = obs["party_attributes"]
+        party_info = tf.concat([moves_embed, types, attributes], axis=-1)
+        party_embed = self.pokemon_mlp(party_info)
+
+        attended_party = self.party_attention(
+            query=context,
+            key_value=party_embed,
+        )
 
         items = self.items_embedding(tf.cast(obs['item_ids'], tf.int64))
         item_quantities = tf.expand_dims(obs['item_quantities'], axis=-1)
@@ -245,25 +322,29 @@ class SmallBoeysModel(BaseModel):
         items_embed = self.items_mlp(items_info)
         items_embed = tf.reduce_max(items_embed, axis=-2)
 
-        events =self.events_embedding(tf.cast(obs['recent_event_ids'], tf.int64))
-        events_age = tf.expand_dims(obs['recent_event_ids_age'], axis=-1)
-        events_info = tf.concat([events, events_age], axis=-1)
-        events_embed = self.events_mlp(events_info)
-        events_embed = tf.reduce_max(events_embed, axis=-2)
+        events = self.events_embedding(tf.cast(obs['recent_event_ids'], tf.int64))
+        # events_age = tf.expand_dims(obs['recent_event_ids_age'], axis=-1)
+        # events_info = tf.concat([events, events_age], axis=-1)
+        # events_embed = self.events_mlp(events_info)
+        events_embed = tf.reduce_max(events, axis=-2)
 
         maps = self.maps_embedding(tf.cast(obs['map_ids'], tf.int64))
-        map_features = self.maps_mlp(maps)
-        maps_embed = tf.reduce_max(map_features, axis=-2)
+        maps_embed = tf.reduce_max(maps, axis=-2)
 
         additional_ram_info = obs["ram"]
 
         concat = tf.concat([
-            additional_ram_info,
             maps_embed,
-            events_embed, items_embed, poke_opp_head, party_head_embed,
+            events_embed,
+            map_features_embed,
             screen_embed,
-            map_features_embed
-                            ], axis=-1)
+            items_embed,
+            attended_moves,
+            context,
+            attended_party,
+            additional_ram_info,
+        ], axis=-1)
+
         return self.final_mlp(concat)
 
 
@@ -319,7 +400,7 @@ class SmallBoeysModel(BaseModel):
             state
         )
         policy_logits = self.policy_head(final_embeddings)
-        self._values = self.value_head(final_embeddings)[: ,:, 0]
+        self._values = self.value_head(final_embeddings)[:, :, 0]
         return policy_logits, self._values
 
     def critic_loss(
@@ -327,6 +408,7 @@ class SmallBoeysModel(BaseModel):
             vf_targets
     ):
         return tf.math.square(vf_targets-self._values)
+        #return self.value_head.loss(vf_targets)
 
     def get_initial_state(self):
         return (np.zeros(2, dtype=np.float32),)

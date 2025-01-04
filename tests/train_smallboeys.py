@@ -21,7 +21,7 @@ def cfg():
 
     env_config = dict(
         game_path = game_path,
-        episode_length = 2048 * 30000, # 2048 is short, for debugging purposes.
+        episode_length = 2048 * 30_000, # 2048 is short, for debugging purposes.
         enable_start = False,
         enable_roll_party = True,
         enable_pass = False,
@@ -32,19 +32,20 @@ def cfg():
         flag_history_length = 15,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        checkpoint_identifiers = ("visited_pokemon_centers_count", "badge_count"),
-        max_num_checkpoints = 15,
-        env_checkpoint_scoring = {"total_rewards": 1},
+        checkpoint_identifiers = ("badge_count",),
+        max_num_savestates_per_checkpoint = 50,
+        env_checkpoint_scoring = {"badges_collected_from_checkpoint": 100},
         default_savestate = "faster_red_post_parcel_pokeballs.state",
-        reward_scales = dict(seen_pokemons=0, experience=1, badges=5, events=2, opponent_level=0,
-                             blackout=1, exploration=0.02, early_termination=5, heal=5, visited_maps=0, battle_staling=0.01),
+        reward_scales = dict(seen_pokemons=0, party_building=1, experience=1, badges=30, events=2, opponent_level=0,
+                             blackout=0.3, fainting=0.1,  exploration=0.02, early_termination=0.1, heal=2, shopping=0.5,
+                             box_usage=1, battle_staling=1e-4),
         laziness_delta_t = 2048*5,
-        laziness_threshold = 2,
+        laziness_threshold = 10,
         session_path = "red_tests",
         record = False,
-        speed_limit = 2,
-        record_skipped_frame = False,
-        render = False,
+        record_skipped_frame=False,
+        speed_limit = -1,
+        render = True,
         stream = True,
         bot_name = "deepred"
     )
@@ -60,7 +61,7 @@ def cfg():
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 512
     max_seq_len = trajectory_length # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
-    train_batch_size = 65536
+    train_batch_size = trajectory_length * num_workers
     n_epochs=3
     minibatch_size = 2048 # we are limited in GPU RAM ... A bigger minibatch leads to stabler updates.
     max_queue_size = train_batch_size * 10
@@ -73,22 +74,23 @@ def cfg():
     count_based_discount = 0.9
 
     # env checkpoint config
-    env_checkpoint_temperature = 30 # temperature for the softmax distribution of checkpoints.
+    env_checkpoint_temperature = 100 # temperature for the softmax distribution of checkpoints.
     env_checkpoint_score_lr = 0.1 # speed at which we update the scores for the checkpoints
+    min_save_states = 15 # minimum number of savestates before initialsing a checkpoint.
     env_checkpoint_epsilon = 0.2 # frequency at which we pick random checkpoints
 
     default_policy_config = {
 
-        'discount': 0.998,  # rewards are x0,129 after 2048 steps.
+        'discount': 0.999,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 1e-2, # encourages exploration
+        'entropy_cost': 1.3e-2, # encourages exploration
         'lr': 2e-4, #5e-4
 
-        'grad_clip': 0.5,
+        'grad_clip': 1.,
         'ppo_clip': 0.1, # smaller clip coefficient will lead to more conservative updates.
-        'baseline_coeff': 0.25,
-        'initial_kl_coeff': 0.,
-        'kl_target': 0.01,
+        'baseline_coeff': 0.5,
+        'initial_kl_coeff': 1.,
+        'kl_target': 0.002,
         "vf_clip": 0.1
         }
 
@@ -143,5 +145,5 @@ def main(_config):
         dir=config["wandb_logdir"]
     )
 
-    trainer = SynchronousTrainer(config, restore=config["restore"], with_spectator=config["env_config"]["render"])
+    trainer = SynchronousTrainer(config, restore=config["restore"], with_spectator=False)#config["env_config"]["render"])
     trainer.run()

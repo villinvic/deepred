@@ -43,7 +43,7 @@ class GBConsole(PyBoy):
             flag_history_length: int = 10,
             enabled_patches: Tuple[str] = (),
             checkpoint_identifiers: Tuple[str] = (),
-            max_num_checkpoints: int = 15,
+            max_num_savestates_per_checkpoint: int = 15,
 
             **kwargs
     ):
@@ -58,7 +58,7 @@ class GBConsole(PyBoy):
         :param default_savestate: If None, loads the game normally, otherwise, boots the game starting from the given state.
         :param enabled_patches: patches to enable for the game to be more RL-friendly.
         :param checkpoint_identifiers: gamestate attributes to use to save checkpoints.
-        :param max_num_checkpoints: numbers of checkpoints to keep per checkpoint id.
+        :param max_num_savestates_per_checkpoint: numbers of checkpoints to keep per checkpoint id.
 
         :param kwargs: Additional parameters to pass to the PyBoy constructor.
         """
@@ -75,7 +75,7 @@ class GBConsole(PyBoy):
         self.agent_helper = AgentHelper()
 
         self.render = render
-        self.min_frame_skip = 24  # 24 (seems unnecessarily large ?)
+        self.min_frame_skip = 20  # 24 (seems unnecessarily large ?)
         self.set_emulation_speed(speed_limit if render else 0)
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
@@ -96,11 +96,11 @@ class GBConsole(PyBoy):
         )
 
         self.checkpoint_identifiers = checkpoint_identifiers
-        self.max_num_checkpoints = max_num_checkpoints
+        self.max_num_savestates_per_checkpoint = max_num_savestates_per_checkpoint
         self._checkpointer = EnvCheckpointer(
             self.output_dir.parent,
             self.checkpoint_identifiers,
-            self.max_num_checkpoints
+            self.max_num_savestates_per_checkpoint
         )
 
         self._additional_memory = self._additional_memory_maker()
@@ -168,7 +168,7 @@ class GBConsole(PyBoy):
             self.video_index += 1
             path = self.video_dir / Path(f'episode_{self.video_index}').with_suffix('.mp4')
 
-        self.recorder = mediapy.VideoWriter(path, (144, 160), fps=20)
+        self.recorder = mediapy.VideoWriter(path, (144, 160), fps=180)
         self.recorder.__enter__()
 
     def terminate_video(self):
@@ -345,7 +345,7 @@ class GBConsole(PyBoy):
                 self.step_event(WindowEvent.PRESS_BUTTON_B)
                 finalise = False
 
-            elif c >= 8:
+            if c >= 8:
                 # break after some frames anyways
                 break
         return finalise

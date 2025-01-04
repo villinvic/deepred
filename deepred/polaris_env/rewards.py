@@ -6,7 +6,7 @@ import tree
 from attr import dataclass
 
 from deepred.polaris_env.gamestate import GameState
-from deepred.polaris_env.pokemon_red.enums import Map
+from deepred.polaris_env.pokemon_red.enums import Map, FixedPokemonType
 from deepred.polaris_utils.counting import HashCounts, hash_function
 
 
@@ -28,17 +28,20 @@ class Goals(NamedTuple):
 
     """
     seen_pokemons: float = 0
+    party_building: float = 0
     badges: float = 0
     experience: float = 0
     events: float = 0
     blackout: float = 0
+    fainting: float = 0
     heal: float = 0
     early_termination: float = 0
     opponent_level: float = 0
     # computed with map-(event flags) hash
     exploration: float = 0
-    visited_maps: float = 0
-    
+    shopping: float = 0
+    box_usage: float = 0
+
     battle_staling: float = 0
 
 
@@ -118,17 +121,28 @@ class PolarisRedRewardFunction:
             (gamestate.is_at_pokecenter or gamestate.map == Map.PALLET_TOWN)
         )
 
+        num_fainted = sum([
+            int(hp == 0.) for hp in gamestate.party_hp
+        ])
+
+        # kinda hard to optimise this I guess
+        # TODO: when swapping pc mons, care about types and evolutions.
+        type_diversity = len({ptype for ptype in gamestate.party_types.flatten() if ptype != FixedPokemonType.NO_TYPE})
+
         self._previous_gamestate = gamestate
         return Goals(
             seen_pokemons=gamestate.species_seen_count,
+            party_building=type_diversity,
             badges=gamestate.badge_count,
-            experience=gamestate._additional_memory.statistics.episode_max_party_lvl_sum,
+            experience=gamestate._additional_memory.statistics.episode_party_lvl_sum_no_lead,
             events=gamestate._additional_memory.statistics.episode_max_event_count,
             exploration=self.total_exploration,
             blackout=blackout,
+            fainting=num_fainted,
             opponent_level=gamestate._additional_memory.statistics.episode_max_opponent_level,
             heal=gamestate.visited_pokemon_centers_count,
-            visited_maps=len(gamestate._additional_memory.map_history.visited_maps),
+            shopping=sum(gamestate.bag_items.values()),
+            box_usage=int(gamestate.has_better_pokemon_in_box),
             battle_staling=int(gamestate._additional_memory.battle_staling_checker.is_battle_staling())
         )
 
@@ -147,14 +161,17 @@ class PolarisRedRewardFunction:
 
         rewards = Goals(
             seen_pokemons=goal_updates.seen_pokemons,
+            party_building=goal_updates.party_building,
             badges=goal_updates.badges,
             experience=np.clip(goal_updates.experience, 0, 1),
             events=goal_updates.events,
             exploration=goal_updates.exploration,
             blackout=-np.maximum(0, goal_updates.blackout), # blackout_update = 1 when we blackout, -1 when we respawn.
+            fainting=-np.maximum(0, goal_updates.fainting),
             opponent_level=goal_updates.opponent_level,
             heal = goal_updates.heal,  # when we got a new checkpoint
-            visited_maps = goal_updates.visited_maps,
+            shopping = int(goal_updates.shopping != 0 and gamestate.is_at_pokemart),
+            box_usage= abs(goal_updates.box_usage), # +1 when catching good pokemon and +1 for retrieving it in the box.
             battle_staling = -goals.battle_staling
         )
 
@@ -188,6 +205,7 @@ class PolarisRedRewardFunction:
         return {
             "to_pop/visited_hash": self.hash_counts.counts,
             "rewards": self._cumulated_rewards,
+            "badges_collected_from_checkpoint": self._cumulated_rewards.badges,
             "total_rewards": self._cumulated_rewards_history[-1],
         }
 

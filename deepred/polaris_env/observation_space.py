@@ -14,7 +14,7 @@ from PIL import Image
 from gymnasium import spaces
 from gymnasium.spaces import Box
 
-from deepred.polaris_env.pokemon_red.enums import Map, BagItem, Pokemon, PokemonType, Move, ProgressionFlag, BattleType
+from deepred.polaris_env.pokemon_red.enums import Map, BagItem, Pokemon, FixedPokemonType, Move, ProgressionFlag, BattleType
 from deepred.polaris_env.gamestate import GameState
 from deepred.polaris_env.pokemon_red.map_dimensions import MapDimensions
 
@@ -315,6 +315,25 @@ class PolarisRedObservationSpace:
                 scale=1,
                 domain=(0., 1.),
             ),
+            dpos=RamObservation(
+                extractor=lambda gamestate: gamestate._additional_memory.visited_tiles.dpos,
+                nature = ObsType.CONTINUOUS,
+                size = 2,
+                scale = 1,
+                domain = (-1., 1.),
+            ),
+            hp_frac=RamObservation(
+                extractor=lambda gamestate: np.mean(gamestate.party_hp[:gamestate.party_count]),
+                nature = ObsType.CONTINUOUS,
+                scale = 1,
+                domain = (0., 1.),
+            ),
+            pp_frac=RamObservation(
+                extractor=lambda gamestate: np.mean(gamestate.party_pps[:gamestate.party_count]),
+                nature = ObsType.CONTINUOUS,
+                scale = 1/20,
+                domain = (0., 20.),
+            ),
             # Optional addons
             # battle turns
         )
@@ -381,36 +400,100 @@ class PolarisRedObservationSpace:
             preprocess=False
         )
 
-        pokemon_type_ids_observation = RamObservation(
-            extractor=lambda gamestate: gamestate.pokemon_types,
+        party_type_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.party_types,
             nature=ObsType.CATEGORICAL,
-            size=(12, 2),
-            domain=(0, len(PokemonType)),
+            size=(6, 2),
+            domain=(0, len(FixedPokemonType)),
             preprocess=False
         )
-
-        pokemon_move_ids_observation = RamObservation(
-            extractor=lambda gamestate: gamestate.pokemon_moves,
+        
+        sent_out_party_type_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_party_types,
             nature=ObsType.CATEGORICAL,
-            size=(12, 4),
+            size=2,
+            domain=(0, len(FixedPokemonType)),
+            preprocess=False
+        )
+        
+        sent_out_opp_type_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_opponent_types,
+            nature=ObsType.CATEGORICAL,
+            size=2,
+            domain=(0, len(FixedPokemonType)),
+            preprocess=False
+        )
+        
+        party_move_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.party_moves,
+            nature=ObsType.CATEGORICAL,
+            size=(6, 4),
+            domain=(0, len(Move)),
+            preprocess=False
+        )
+        
+        sent_out_party_move_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_party_moves,
+            nature=ObsType.CATEGORICAL,
+            size=4,
+            domain=(0, len(Move)),
+            preprocess=False
+        )
+        
+        sent_out_opp_move_ids_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_opponent_moves,
+            nature=ObsType.CATEGORICAL,
+            size=4,
             domain=(0, len(Move)),
             preprocess=False
         )
 
-        pokemon_pps_observation = RamObservation(
-            extractor=lambda gamestate: gamestate.pokemon_pps,
+        party_pps_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.party_pps,
             nature=ObsType.CONTINUOUS,
-            size=(12, 4),
-            scale=1/30,
-            domain=(0., 30.),
+            size=(6, 4),
+            scale=1/20,
+            domain=(0., 20.),
+        )
+        
+        sent_out_party_pps_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_party_pps,
+            nature=ObsType.CONTINUOUS,
+            size=4,
+            scale=1/20,
+            domain=(0., 20.),
+        )
+        
+        sent_out_opp_pps_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_opponent_pps,
+            nature=ObsType.CONTINUOUS,
+            size=4,
+            scale=1/20,
+            domain=(0., 20.),
         )
 
-        pokemon_stats_observation = RamObservation(
-            extractor=lambda gamestate: gamestate.pokemon_attributes,
+        party_attributes_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.party_attributes,
             nature=ObsType.CONTINUOUS,
-            size=dummy_gamestate.pokemon_attributes.shape,
+            size=dummy_gamestate.party_attributes.shape,
             scale=1., # everything was prescaled
-            domain=(0., 1.),
+            domain=(0., 3.),
+        )
+
+        sent_out_party_attributes_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_party_attributes,
+            nature=ObsType.CONTINUOUS,
+            size=dummy_gamestate.sent_out_party_attributes.shape,
+            scale=1., # everything was prescaled
+            domain=(0., 3.),
+        )
+
+        sent_out_opp_attributes_observation = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out_opponent_attributes,
+            nature=ObsType.CONTINUOUS,
+            size=dummy_gamestate.sent_out_opponent_attributes.shape,
+            scale=1., # everything was prescaled
+            domain=(0., 3.),
         )
 
         recent_event_ids_observation = RamObservation(
@@ -429,6 +512,10 @@ class PolarisRedObservationSpace:
             domain=(0., 1.),
         )
 
+        is_in_battle_observation = RamObservation(
+            extractor=lambda gamestate: int(gamestate.is_in_battle),
+            nature=ObsType.BINARY,
+        )
         # recent pokemon centers, last checkpoint
 
         self.observations = dict(
@@ -442,12 +529,27 @@ class PolarisRedObservationSpace:
             item_ids=bag_item_ids_observation,
             item_quantities=bag_item_counts_observation,
             #pokemon_ids=pokemon_ids_observation,
-            pokemon_type_ids=pokemon_type_ids_observation,
-            pokemon_move_ids=pokemon_move_ids_observation,
-            pokemon_move_pps= pokemon_pps_observation,
-            pokemon_stats=pokemon_stats_observation,
+            
+            party_type_ids=party_type_ids_observation,
+            sent_out_party_type_ids=sent_out_party_type_ids_observation,
+            sent_out_opp_type_ids=sent_out_opp_type_ids_observation,
+
+            party_pps=party_pps_observation,
+            sent_out_party_pps=sent_out_party_pps_observation,
+            sent_out_opp_pps=sent_out_opp_pps_observation,
+
+            party_move_ids=party_move_ids_observation,
+            sent_out_party_move_ids=sent_out_party_move_ids_observation,
+            sent_out_opp_move_ids=sent_out_opp_move_ids_observation,
+
+            party_attributes=party_attributes_observation,
+            sent_out_party_attributes=sent_out_party_attributes_observation,
+            sent_out_opp_attributes=sent_out_opp_attributes_observation,
+            
             recent_event_ids=recent_event_ids_observation,
             recent_event_ids_age=recent_event_ids_age_observation,
+
+            is_in_battle=is_in_battle_observation
         )
 
         # TODO: adapt and test for dtypes, and various types of observations
