@@ -8,8 +8,8 @@ class MoveEffect:
     value: int = 1
 
     def power_function(self, move: "MoveInfo", pokemon_types: List[FixedPokemonType]):
-        actual_power = move.actual_power(pokemon_types)
 
+        actual_power = move.actual_power(pokemon_types)
         return actual_power * move.accuracy
 
 

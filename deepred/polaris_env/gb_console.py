@@ -14,6 +14,7 @@ from deepred.polaris_env.pokemon_red.enums import StartMenuItem, RamLocation
 from deepred.polaris_env.game_patching import GamePatching
 from deepred.polaris_env.agent_helper import AgentHelper
 from deepred.polaris_env.gamestate import GameState
+from deepred.polaris_env.red_arena.battle_sampler import SampledBattle
 
 RELEASE_EVENTS = {
     WindowEvent.PRESS_ARROW_DOWN: WindowEvent.RELEASE_ARROW_DOWN,
@@ -42,7 +43,7 @@ class GBConsole(PyBoy):
             map_history_length: int = 10,
             flag_history_length: int = 10,
             enabled_patches: Tuple[str] = (),
-            checkpoint_identifiers: Tuple[str] = (),
+            checkpoint_identifiers: Tuple[str] | None = None,
             max_num_savestates_per_checkpoint: int = 15,
 
             **kwargs
@@ -97,7 +98,7 @@ class GBConsole(PyBoy):
 
         self.checkpoint_identifiers = checkpoint_identifiers
         self.max_num_savestates_per_checkpoint = max_num_savestates_per_checkpoint
-        self._checkpointer = EnvCheckpointer(
+        self._checkpointer = None if self.checkpoint_identifiers is None else EnvCheckpointer(
             self.output_dir.parent,
             self.checkpoint_identifiers,
             self.max_num_savestates_per_checkpoint
@@ -141,6 +142,14 @@ class GBConsole(PyBoy):
             self._additional_memory = self._additional_memory_maker()
             self._frame = 0
             self._step = 0
+        elif isinstance(ckpt, SampledBattle):
+            # restore with provided alternate path
+            with open(ckpt.savestate, "rb") as f:
+                self.load_state(f)
+            self._additional_memory = self._additional_memory_maker()
+            self._frame = 0
+            self._step = 0
+            ckpt.inject_to_ram(self.memory)
         else:
             self.load_state(ckpt.savestate)
             self._additional_memory = ckpt.additional_memory
@@ -153,7 +162,7 @@ class GBConsole(PyBoy):
         self._gamestate = self.tick(2)
         self.game_patcher.patch(self._gamestate)
         self._additional_memory.update(self._gamestate)
-        self._checkpointer = EnvCheckpointer(
+        self._checkpointer = None if self.checkpoint_identifiers is None else EnvCheckpointer(
             self.output_dir.parent,
             self.checkpoint_identifiers,
             self.max_num_savestates_per_checkpoint,
@@ -196,6 +205,7 @@ class GBConsole(PyBoy):
             self.handle_error("Stuck stepping the console.")
 
     def tick(self, count=1, render=True) -> GameState:
+
         super().tick(count, render)
         if self.record and render:
             self.add_video_frame()
@@ -354,10 +364,9 @@ class GBConsole(PyBoy):
             self,
             event: WindowEvent | CustomEvent
     ) -> GameState:
-        self._checkpointer.do_checkpoint_if_needed(
-            self.save_state,
-            self._gamestate
-        )
+        """
+        Main function for processing bot inputs
+        """
         try:
             if event == CustomEvent.ROLL_PARTY:
                 self.agent_helper.roll_party(gamestate=self._gamestate)
@@ -371,7 +380,16 @@ class GBConsole(PyBoy):
             if finalise:
                 self.step_event(event)
 
-            return self.get_actionable_frame()
+            self.get_actionable_frame()
+
+            if self._checkpointer is not None:
+                self._checkpointer.do_checkpoint_if_needed(
+                    self.save_state,
+                    self._gamestate,
+                )
+
+            return self._gamestate
+
         except Exception as e:
             self.handle_error(str(e))
 

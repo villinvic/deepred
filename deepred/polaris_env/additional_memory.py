@@ -42,13 +42,15 @@ class VisitedTiles(AdditionalMemoryBlock):
 
         coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count, gamestate.pos_x, gamestate.pos_y))
         coord_map_hash = hash_function((gamestate.map, gamestate.pos_x, gamestate.pos_y))
-        if coord_map_hash not in self.coord_map_hashes:
-            self.coord_map_hashes[coord_map_hash] = 0
-        self.coord_map_hashes[coord_map_hash] += 1
 
-        if coord_map_event_hash not in self.coord_map_event_hashes:
-            self.coord_map_event_hashes[coord_map_event_hash] = 0
-        self.coord_map_event_hashes[coord_map_event_hash] += 1
+        if not gamestate.is_in_battle:
+            if coord_map_hash not in self.coord_map_hashes:
+                self.coord_map_hashes[coord_map_hash] = 0
+            self.coord_map_hashes[coord_map_hash] += 1
+
+            if coord_map_event_hash not in self.coord_map_event_hashes:
+                self.coord_map_event_hashes[coord_map_event_hash] = 0
+            self.coord_map_event_hashes[coord_map_event_hash] += 1
 
         if gamestate.map not in self.visited_tiles:
             map_w, map_h = MapDimensions[gamestate.map].shape
@@ -75,7 +77,7 @@ class VisitedTiles(AdditionalMemoryBlock):
 
     def is_overvisited(self, gamestate: "GameState") -> bool:
         coord_map_event_hash = hash_function((gamestate.map, gamestate.event_flag_count,  gamestate.pos_x, gamestate.pos_y))
-        return False #self.coord_map_event_hashes.get(coord_map_event_hash, 0) > 10000
+        return self.coord_map_event_hashes.get(coord_map_event_hash, 0) > 300
 
 
     def get(
@@ -242,8 +244,6 @@ class Statistics(AdditionalMemoryBlock):
         party_lead = np.argmax(gamestate.party_level)
 
         party_lvl_sum_no_lead = np.sum(np.delete(gamestate.party_level, party_lead))
-        if not hasattr(self, "episode_party_lvl_sum_no_lead"):
-            self.episode_party_lvl_sum_no_lead = 0
 
         if party_lvl_sum_no_lead > self.episode_party_lvl_sum_no_lead:
             self.episode_party_lvl_sum_no_lead = party_lvl_sum_no_lead

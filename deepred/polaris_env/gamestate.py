@@ -447,7 +447,7 @@ class GameState:
         Array of shape (6, 2)
         Types for party pokemons.
         """
-        types = np.zeros((6, 2), dtype=np.uint8)
+        types = np.full((6, 2), fill_value=FixedPokemonType.NO_TYPE, dtype=np.uint8)
 
         for i in range(self.party_count):
             type1 = PokemonType(self._read(RamLocation.PARTY_0_TYPE0 + i * DataStructDimension.POKEMON_STATS)).fix()
@@ -458,6 +458,21 @@ class GameState:
             types[i] = type1, type2
 
         return types
+
+    @cproperty
+    def party_type_counts(self) -> Dict[PokemonType, int]:
+        """
+        type counts of the party
+        """
+        type_counts = defaultdict(int)
+        for type1, type2 in self.party_types:
+            type_counts[type1] += 1
+
+        return type_counts
+
+    def type_penalty(self, types) -> float:
+
+        return 0.8 ** sum(self.party_type_counts[t] for t in types)
 
     @cproperty
     def sent_out_party_types(self) -> np.ndarray:
@@ -471,7 +486,7 @@ class GameState:
         """
         Types for sent out opp pokemon.
         """
-        types = np.zeros((2,), dtype=np.uint8)
+        types = np.full((2,), fill_value=FixedPokemonType.NO_TYPE, dtype=np.uint8)
         if self.is_in_battle:
             # also opp sent out types
             type1 = PokemonType(self._read(RamLocation.WILD_POKEMON_TYPE0)).fix()
@@ -599,16 +614,15 @@ class GameState:
 
         hp = self._read_double(start_address + 1) / 250
         max_hp =self._read_double(start_address + 34) / 250
-
-        index_one_hot = [0.] * 6
-        index_one_hot[index] = 1.
-
-        return index_one_hot + [
+        lvl = self._read(start_address + 33)
+        is_leader = lvl == max(self.party_level)
+        return [
             hp,  # current hp
             int(hp > 0),  # knocked out ?
             hp / (max_hp+1e-8),
             max_hp,
-            self._read(start_address + 33) / 100, # level
+            int(is_leader),
+            lvl / 100, # level
             atk_mod * self._read_double(start_address + 36) / 134,  # attack
             def_mod * self._read_double(start_address + 38) / 180,  # defense
             spd_mod * self._read_double(start_address + 40) / 140,  # speed
@@ -639,11 +653,12 @@ class GameState:
 
         hp = self._read_double(start_address + 1) / 250
         max_hp = self._read_double(start_address + 15) / 250 # max hp
-        return [0.] * 6 + [
+        return [
             hp,  # current hp
             int(hp > 0),  # knocked out ?
             hp / (max_hp+1e-8),
             max_hp,  # max hp
+            0., # to ensure we have the same shape as party pokemons
             self._read(start_address + 14) / 100, # levels
             atk_mod * self._read_double(start_address + 17) / 134, # attack
             def_mod * self._read_double(start_address + 19) / 180,  # defense
@@ -681,7 +696,7 @@ class GameState:
                 for i in range(self.opponent_party_count):
                     if i == self._read(RamLocation.OPPONENT_POKEMON_SENT_OUT):
                         attributes[i + 6] = self.opponent_sent_out_pokemon_stats_at_index(
-                            RamLocation.WILD_POKEMON_SPECIES,  # this is also the address for opponent sent out pokemons.
+                            RamLocation.WILD_POKEMON_SPECIES, # this is also the address for opponent sent out pokemons.
                             party_pokemon=False,
                             position=i,
                             wild_pokemon=False,
@@ -699,7 +714,7 @@ class GameState:
         """
         An array holding attributes for the party pokemons
         """
-        attributes = np.zeros((6, 22 + 6), np.float32)
+        attributes = np.zeros((6, 23), np.float32)
 
         for i in range(self.party_count):
             attributes[i] = self.party_pokemon_stats_at_index(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS, i)
@@ -712,7 +727,7 @@ class GameState:
 
     @cproperty
     def sent_out_opponent_attributes(self) -> np.ndarray:
-        attributes = np.zeros((22 + 6,), np.float32)
+        attributes = np.zeros((23,), np.float32)
         if self.is_in_battle:
             attributes[:] = self.opponent_sent_out_pokemon_stats()
 
@@ -783,7 +798,7 @@ class GameState:
         """
         The current party pokemon health fractions (0 is fainted, 1 is full hp).
         """
-        return [ self._read_double(curr_hp_addr) / (self._read_double(max_hp_addr) + 1e-6)
+        return [ self._read_double(curr_hp_addr) / (self._read_double(max_hp_addr) + 1e-8)
         # Addresses are not adjacent.
         for curr_hp_addr, max_hp_addr in [
                      (RamLocation.PARTY_0_HP, RamLocation.PARTY_0_MAXHP),
@@ -926,8 +941,6 @@ class GameState:
                 break
             items.append(item_type)
 
-        # TODO why is this len 21 sometimes ?
-        # break when item_count = 0
         bag = items + [BagItem.NO_ITEM] * (20 - len(items))
         return bag
 
@@ -953,7 +966,7 @@ class GameState:
         """
         Returns the bag as a dict of items: counts.
         """
-        bag_items = defaultdict(int) # default dict to easily add new items when buying.
+        bag_items = {}
         for item, count in zip(self.ordered_bag_items, self.ordered_bag_counts):
             if item == BagItem.NO_ITEM:
                 break
@@ -1367,7 +1380,21 @@ class GameState:
         """
         List of stat sums of the box pokemons
         """
-        return [box_pokemon.scale(level=stats_level_scale).sum() for box_pokemon in self.box_pokemon_stats]
+        box_stat_sums = [box_pokemon.scale(level=stats_level_scale).sum() for box_pokemon in self.box_pokemon_stats]
+
+        # decay stat sums for poke where we already have types (want diverse types)
+
+        for i in range(len(box_stat_sums)):
+            type1 = PokemonType(self._read(RamLocation.BOX_POKEMON_TYPES_START + i * DataStructDimension.BOX_POKEMON_STATS)).fix()
+            type2 = PokemonType(self._read(RamLocation.BOX_POKEMON_TYPES_START + 1 + i * DataStructDimension.BOX_POKEMON_STATS)).fix()
+            ptypes = {type1, type2}
+
+            if FixedPokemonType.NO_TYPE in ptypes:
+                ptypes.remove(FixedPokemonType.NO_TYPE)
+
+            box_stat_sums[i] *= self.type_penalty(ptypes)
+
+        return box_stat_sums
 
     @cproperty
     def best_box_pokemon_index(self) -> int:
@@ -1389,11 +1416,17 @@ class GameState:
             defense = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 38)
             speed = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 40)
             special = self._read_double(RamLocation.PARTY_START + i * DataStructDimension.POKEMON_STATS + 42)
-            party_stat_sums.append(
-                PokemonBaseStats(hp=hp, attack=attack, defense=defense, speed=speed, special=special).rescale_as(
+
+            stat_sum = PokemonBaseStats(hp=hp, attack=attack, defense=defense, speed=speed, special=special).rescale_as(
                     original_level=level, target_level=stats_level_scale
                 ).sum()
-            )
+            ptypes = set(list(self.party_types[i]))
+
+            if FixedPokemonType.NO_TYPE in ptypes:
+                ptypes.remove(FixedPokemonType.NO_TYPE)
+
+            party_stat_sums.append(stat_sum * self.type_penalty(ptypes))
+
         return party_stat_sums
 
     @cproperty
@@ -1444,8 +1477,6 @@ class GameState:
         The latest triggered flag events.
         """
         return [self.step - step for step in self._additional_memory.flag_history.stepstamps]
-
-
 
 
 def pokemon_status(status_byte):

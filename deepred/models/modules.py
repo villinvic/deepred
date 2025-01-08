@@ -33,7 +33,6 @@ class Conv2DResidualModule(snt.Module):
             pooling_type='MAX',
             padding='SAME',
             strides=self.pooling_stride)
-
         for j in range(self.num_blocks):
             block_input = conv_out
             conv_out = self.activation(conv_out)
@@ -42,7 +41,7 @@ class Conv2DResidualModule(snt.Module):
             conv_out = self.conv_layers[j*2+2](conv_out)
             conv_out += block_input
 
-        return residual
+        return conv_out
 
 
 class ContextualAttentionPooling(snt.Module):
@@ -67,22 +66,37 @@ class ContextualAttentionPooling(snt.Module):
     def __call__(
             self,
             query: tf.Tensor,
-            key_value: tf.Tensor,
+            key: tf.Tensor,
+            value: tf.Tensor,
+            preprocessed_value: False,
+            indexed: bool = True,
 
     ) -> tf.Tensor:
         """
         Perform attention pooling with context.
         """
-        query = tf.expand_dims(query, axis=-2)
+
+        if query.shape != key.shape:
+            query = tf.expand_dims(query, axis=-2)
+
         query = self.query_layer(query)
-        key = self.key_layer(key_value)
-        value = self.value_layer(key_value)
+        key = self.key_layer(key)
+        if preprocessed_value:
+            value = value
+        else:
+            value = self.value_layer(value)
 
         attn_output = tf.matmul(query, key, transpose_b=True)  # Query x Key ^T
         attn_weights = tf.nn.softmax(attn_output, axis=-1)  # Normalize attention weights with softmax
 
-        attended_embedding = tf.matmul(attn_weights, value)  # Shape: (batch_size, 1, embed_dim)
-        attended_embedding = tf.squeeze(attended_embedding, axis=-2)  # Shape: (batch_size, embed_dim)
+        shape = tf.shape(value)
+        one_hots = tf.expand_dims(tf.eye(shape[-2], dtype=tf.float32), axis=0)
+        if len(shape) > 3:
+            one_hots = tf.tile(tf.expand_dims(one_hots, axis=0), tf.concat([shape[:-2], [1, 1]], axis=0))
+        indexed_values = tf.concat([value, one_hots], axis=-1)
+
+        attended_embedding = tf.matmul(attn_weights, indexed_values)  # Shape: (batch_size, 1, embed_dim)
+        attended_embedding = tf.reduce_sum(attended_embedding, axis=-2)  # Shape: (batch_size, embed_dim)
 
         return attended_embedding
 

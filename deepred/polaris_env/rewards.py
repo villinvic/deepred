@@ -94,10 +94,11 @@ class PolarisRedRewardFunction:
         self.scales = Goals() if reward_scales is None else Goals(** reward_scales)
         self.delta_goals = Goals()
 
+        self.party_evenness = 0
         self.total_exploration = 0
         self.hash_counts = hash_counts
         self.laziness_threshold = laziness_threshold
-        self._cumulated_rewards_history = [None] * laziness_delta_t
+        self._cumulated_rewards_history = [-1e8] * (laziness_delta_t - 1) + [0.]
 
         self._cumulated_rewards = Goals()
         self._previous_gamestate = inital_gamestate
@@ -112,13 +113,18 @@ class PolarisRedRewardFunction:
         self.total_exploration = 0.5*(len(gamestate._additional_memory.visited_tiles.coord_map_hashes)
                                        + len(gamestate._additional_memory.visited_tiles.coord_map_event_hashes)) - overvisited
 
+        old_hp_frac = np.sum(self._previous_gamestate.party_hp[:self._previous_gamestate.party_count])
+        hp_frac = np.sum(gamestate.party_hp[:gamestate.party_count])
+
+        if gamestate.is_at_pokecenter or gamestate.map == Map.REDS_HOUSE_1F:
+            healed_amount = np.clip(hp_frac - old_hp_frac, 0., 6.)
+        else:
+            healed_amount = 0.
+
         blackout = int(
-            sum(self._previous_gamestate.party_hp) / self._previous_gamestate.party_count <
-            sum(gamestate.party_hp) / gamestate.party_count
+            hp_frac > old_hp_frac
             and
             self._previous_gamestate.map != gamestate.map
-            and
-            (gamestate.is_at_pokecenter or gamestate.map == Map.PALLET_TOWN)
         )
 
         num_fainted = sum([
@@ -129,18 +135,19 @@ class PolarisRedRewardFunction:
         # TODO: when swapping pc mons, care about types and evolutions.
         type_diversity = len({ptype for ptype in gamestate.party_types.flatten() if ptype != FixedPokemonType.NO_TYPE})
 
+
         self._previous_gamestate = gamestate
         return Goals(
             seen_pokemons=gamestate.species_seen_count,
             party_building=type_diversity,
             badges=gamestate.badge_count,
-            experience=gamestate._additional_memory.statistics.episode_party_lvl_sum_no_lead,
+            experience=gamestate._additional_memory.statistics.episode_max_party_lvl_sum,
             events=gamestate._additional_memory.statistics.episode_max_event_count,
             exploration=self.total_exploration,
             blackout=blackout,
             fainting=num_fainted,
             opponent_level=gamestate._additional_memory.statistics.episode_max_opponent_level,
-            heal=gamestate.visited_pokemon_centers_count,
+            heal=healed_amount,
             shopping=sum(gamestate.bag_items.values()),
             box_usage=int(gamestate.has_better_pokemon_in_box),
             battle_staling=int(gamestate._additional_memory.battle_staling_checker.is_battle_staling())
@@ -163,13 +170,13 @@ class PolarisRedRewardFunction:
             seen_pokemons=goal_updates.seen_pokemons,
             party_building=goal_updates.party_building,
             badges=goal_updates.badges,
-            experience=np.clip(goal_updates.experience, 0, 1),
+            experience=np.minimum(goal_updates.experience, 2.),
             events=goal_updates.events,
             exploration=goal_updates.exploration,
             blackout=-np.maximum(0, goal_updates.blackout), # blackout_update = 1 when we blackout, -1 when we respawn.
             fainting=-np.maximum(0, goal_updates.fainting),
             opponent_level=goal_updates.opponent_level,
-            heal = goal_updates.heal,  # when we got a new checkpoint
+            heal = np.maximum(0, goal_updates.heal),
             shopping = int(goal_updates.shopping != 0 and gamestate.is_at_pokemart),
             box_usage= abs(goal_updates.box_usage), # +1 when catching good pokemon and +1 for retrieving it in the box.
             battle_staling = -goals.battle_staling
@@ -179,6 +186,12 @@ class PolarisRedRewardFunction:
         self._cumulated_rewards_history.pop(0)
         self._cumulated_rewards_history.append(_compute_step_reward(self._cumulated_rewards, self.scales))
         self._previous_goals = goals
+
+
+        # we scale all rewards with the party level evenness
+        party_evenness = np.mean(gamestate.party_level) / np.maximum(np.max(gamestate.party_level), 1)
+        self.party_evenness = party_evenness
+
         return _compute_step_reward(rewards, self.scales)
 
     def laziness(self) -> float:
@@ -199,6 +212,14 @@ class PolarisRedRewardFunction:
         """
         if self._cumulated_rewards_history[0] is None:
             return False
+
+        if (
+                #self._cumulated_rewards.blackout < 0 or
+                self._cumulated_rewards.battle_staling < 0 or
+                self._previous_gamestate._additional_memory.visited_tiles.is_overvisited(self._previous_gamestate)):
+
+            return True
+
         return self._cumulated_rewards_history[-1] - self._cumulated_rewards_history[0] < self.laziness_threshold
 
     def get_metrics(self) -> dict:
@@ -207,6 +228,7 @@ class PolarisRedRewardFunction:
             "rewards": self._cumulated_rewards,
             "badges_collected_from_checkpoint": self._cumulated_rewards.badges,
             "total_rewards": self._cumulated_rewards_history[-1],
+            "party_evenness": self.party_evenness
         }
 
 

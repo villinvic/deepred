@@ -35,7 +35,6 @@ def rescale_as(
         return int((stat - 5) * target_level / original_level + 5)
 
 
-
 class PokemonStats:
     def __init__(
             self,
@@ -68,6 +67,9 @@ class PokemonStats:
             speed=compute_stat(self.base_stats.speed, level, self.evs.speed, self.ivs.speed),
             special=compute_stat(self.base_stats.special, level, self.evs.special, self.ivs.special),
         )
+
+    def __repr__(self):
+        return f"PokemonStats(pokemon={self.pokemon}, level={self.level}, exp={self.exp}, evs={self.evs}, ivs={self.ivs})"
 
 
 class PokemonBaseStats(NamedTuple):

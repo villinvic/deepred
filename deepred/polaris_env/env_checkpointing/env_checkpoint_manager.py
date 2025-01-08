@@ -131,7 +131,6 @@ class EnvCheckpointSampler:
         ckpt_id = self.ckpt_ids[ckpt_num]
         checkpoint = EnvCheckpoint()
         checkpoint.load(self.path, ckpt_id)
-        print(ckpt_num, ckpt_id)
         return ckpt_id, ckpt_num, checkpoint
 
 

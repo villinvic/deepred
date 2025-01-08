@@ -7,7 +7,7 @@ from deepred.polaris_env.pokemon_red.enums import BagItem
 from deepred.polaris_env.polaris_red import PolarisRed
 from deepred.polaris_utils.callbacks import Callbacks
 
-exp_name = 'smallboeys'
+exp_name = 'double_policy'
 exp_path = "experiments/" + exp_name
 ex = Experiment(exp_name)
 
@@ -29,7 +29,7 @@ def cfg():
         framestack = 1,
         stack_oldest_only = False, # maybe True could speed up.
         map_history_length = 15,
-        flag_history_length = 15,
+        flag_history_length = 45,
         enabled_patches = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                          "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
         checkpoint_identifiers = ("badge_count",),
@@ -38,33 +38,32 @@ def cfg():
         default_savestate = "faster_red_post_parcel_pokeballs.state",
         reward_scales = dict(
             # progress
-            #badges=30,
-            #events=1,
+            badges=30,
+            events=1,
 
             # battling / party building
-            experience=5,
-            party_building=5,
-            #opponent_level=0,
-            #blackout=0.1,
-            #fainting=0.05,
-            #battle_staling=1e-4,
+            experience=1,
+            party_building=0,
+            opponent_level=0,
+            blackout=0.1,
+            fainting=0.05,
+            battle_staling=2e-4,
 
             # helping rewards
             heal=0.1,
-            #shopping=0.3,
-            #box_usage=0.3,
+            shopping=0.5,
+            box_usage=0.5,
 
             # map exploration
             exploration=0.02,
-            #seen_pokemons=0,
+            seen_pokemons=0,
 
             # misc
-            early_termination=0., # 0.1
-
-
+            early_termination=0.,
         ),
+
         laziness_delta_t = 2048*5,
-        laziness_threshold = 10,
+        laziness_threshold = 4,
         session_path = "red_tests",
         record = False,
         record_skipped_frame=False,
@@ -78,9 +77,9 @@ def cfg():
 
     num_workers = 128 # the +1 is for the rendering window.
     policy_path = 'polaris.policies.PPO'
-    model_path = 'deepred.models.small_boeys'
+    model_path = 'deepred.models.double_policy'
     policy_class = 'PPO'
-    model_class = 'SmallBoeysModel'
+    model_class = 'DoublePolicy'
 
     # the episode_length is fixed, we should train over full episodes.
     trajectory_length = 512
@@ -100,22 +99,22 @@ def cfg():
     # env checkpoint config
     env_checkpoint_temperature = 100 # temperature for the softmax distribution of checkpoints.
     env_checkpoint_score_lr = 0.1 # speed at which we update the scores for the checkpoints
-    min_save_states = 15 # minimum number of savestates before initialsing a checkpoint.
+    min_save_states = 50 # minimum number of savestates before initialsing a checkpoint.
     env_checkpoint_epsilon = 0.2 # frequency at which we pick random checkpoints
 
     default_policy_config = {
 
         'discount': 0.999,  # rewards are x0,129 after 2048 steps.
         'gae_lambda': 0.95, # coefficient for Bias-Variance tradeoff in advantage estimation. A smaller lambda may speed up learning.
-        'entropy_cost': 1.1e-2, # encourages exploration
+        'entropy_cost': 1.3e-2, # encourages exploration
         'lr': 2e-4, #5e-4
 
-        'grad_clip': 1.,
-        'ppo_clip': 0.1, # smaller clip coefficient will lead to more conservative updates.
-        'baseline_coeff': 0.5,
+        'grad_clip': 0.5,
+        'ppo_clip': 0.2, # smaller clip coefficient will lead to more conservative updates.
+        'baseline_coeff': 0.25,
         'initial_kl_coeff': 1.,
-        'kl_target': 0.002,
-        "vf_clip": 0.1
+        'kl_target': 0.01,
+        "vf_clip": 1e-1
         }
 
     policy_params = [{
@@ -140,7 +139,7 @@ def cfg():
 
     restore = False
 
-    name = "test_smallboeys_checkpoints"
+    name = "test_double_policy"
 
 @ex.automain
 def main(_config):

@@ -124,6 +124,10 @@ class AgentHelper:
         current_bag = gamestate.bag_items
         money = gamestate.player_money
 
+        if money < 1500:
+            # well, we can sell stuff to have money, but this is helping with the "can_shop" flag
+            return True
+
         def bag_full():
             return len(current_bag) >= MAX_BAG_TYPES
 
@@ -148,7 +152,7 @@ class AgentHelper:
             while (
                     money - 500 >= item_info.price
                     and
-                    current_bag[item] < MAX_ITEM_COUNT
+                    (item not in current_bag or current_bag[item] < MAX_ITEM_COUNT)
                     and not bag_full()
                     and item_info.priority > 0 # never buy useless items.
             ):
@@ -159,8 +163,8 @@ class AgentHelper:
                     item_info
                 )
 
-
         ram = gamestate._ram
+
         inject_bag_to_ram(
             ram,
             current_bag
@@ -289,6 +293,8 @@ def buy_item(
         item: BagItem,
         item_info: BagItemInfo,
 ) -> int:
+    if item not in current_bag:
+        current_bag[item] = 0
     current_bag[item] += 1
     current_money -= item_info.price
     return current_money

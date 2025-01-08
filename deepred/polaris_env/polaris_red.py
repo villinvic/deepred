@@ -194,7 +194,7 @@ class PolarisRed(PolarisEnv):
             gamestate,
             self.input_dict
         )
-        self.metrics.update(gamestate)
+        self.metrics.update(gamestate, event)
         reward = self.reward_function.compute_step_rewards(gamestate)
         # TODO: put in config
         self.step_count += 1

@@ -260,11 +260,11 @@ class PolarisRedObservationSpace:
                 nature=ObsType.CATEGORICAL,
                 domain=(0,len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids)),
             ),
-            visited_pokecenters=RamObservation(
-                extractor=lambda gamestate: gamestate.visited_pokemon_centers,
-                nature=ObsType.BINARY,
-                size=len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids),
-            ),
+            # visited_pokecenters=RamObservation(
+            #     extractor=lambda gamestate: gamestate.visited_pokemon_centers,
+            #     nature=ObsType.BINARY,
+            #     size=len(dummy_gamestate._additional_memory.pokecenter_checkpoints.pokecenter_ids),
+            # ),
             field_moves=RamObservation(
                 extractor=lambda gamestate: gamestate.field_moves,
                 nature=ObsType.BINARY,
@@ -275,20 +275,14 @@ class PolarisRedObservationSpace:
                 nature=ObsType.BINARY,
                 size=len(dummy_gamestate.hms),
             ),
-            battle_type=RamObservation(
-                extractor=lambda gamestate: gamestate.battle_type,
-                nature=ObsType.CATEGORICAL,
-                domain=(0, len(BattleType)),
-            ),
             in_battle=RamObservation(
                 extractor=lambda gamestate: gamestate.is_in_battle,
                 nature=ObsType.BINARY,
             ),
             party_count=RamObservation(
-                extractor=lambda gamestate: gamestate.party_count,
-                nature=ObsType.CONTINUOUS,
-                scale=1/6,
-                domain=(1/6, 1.)
+                extractor=lambda gamestate: gamestate.party_count - 1,
+                nature=ObsType.CATEGORICAL,
+                domain=(0, 5)
             ),
             party_full=RamObservation(
                 extractor=lambda gamestate: int(gamestate.party_count == 6),
@@ -323,16 +317,25 @@ class PolarisRedObservationSpace:
                 domain = (-1., 1.),
             ),
             hp_frac=RamObservation(
-                extractor=lambda gamestate: np.mean(gamestate.party_hp[:gamestate.party_count]),
+                extractor=lambda gamestate: gamestate.party_count - np.sum(gamestate.party_hp[:gamestate.party_count]),
                 nature = ObsType.CONTINUOUS,
-                scale = 1,
-                domain = (0., 1.),
+                scale = 1/2,
+                domain = (0., 6.),
             ),
             pp_frac=RamObservation(
                 extractor=lambda gamestate: np.mean(gamestate.party_pps[:gamestate.party_count]),
                 nature = ObsType.CONTINUOUS,
                 scale = 1/20,
                 domain = (0., 20.),
+            ),
+            battle_type=RamObservation(
+                extractor=lambda gamestate: gamestate.battle_type,
+                nature=ObsType.CATEGORICAL,
+                domain=(0, len(BattleType)),
+            ),
+            can_shop=RamObservation(
+                extractor=lambda gamestate: int(gamestate.player_money > 1500),
+                nature=ObsType.BINARY,
             ),
             # Optional addons
             # battle turns
@@ -516,6 +519,14 @@ class PolarisRedObservationSpace:
             extractor=lambda gamestate: int(gamestate.is_in_battle),
             nature=ObsType.BINARY,
         )
+
+        sent_out_party_index = RamObservation(
+            extractor=lambda gamestate: gamestate.sent_out,
+            nature=ObsType.CATEGORICAL,
+            size=1,
+            domain=(0, 5),
+            preprocess=False
+        )
         # recent pokemon centers, last checkpoint
 
         self.observations = dict(
@@ -549,7 +560,9 @@ class PolarisRedObservationSpace:
             recent_event_ids=recent_event_ids_observation,
             recent_event_ids_age=recent_event_ids_age_observation,
 
-            is_in_battle=is_in_battle_observation
+            is_in_battle=is_in_battle_observation,
+            sent_out_party_index=sent_out_party_index
+
         )
 
         # TODO: adapt and test for dtypes, and various types of observations

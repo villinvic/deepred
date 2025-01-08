@@ -2,7 +2,9 @@ from collections import defaultdict
 from typing import Union
 
 import numpy as np
+from pyboy.utils import WindowEvent
 
+from deepred.polaris_env.action_space import CustomEvent
 from deepred.polaris_env.pokemon_red.enums import Pokemon
 from deepred.polaris_env.gamestate import GameState
 
@@ -17,12 +19,15 @@ class PolarisRedMetrics:
         self.items_used_in_battle = 0
         self.shopping = 0
 
+        self.roll_party_count = 0
+
         self._prev_gamestate : Union[None, GameState] = None
 
 
     def update(
             self,
             gamestate: GameState,
+            event: WindowEvent | CustomEvent,
     ):
         if self._prev_gamestate is not None:
             total_items_delta = sum(gamestate.bag_items.values()) - sum(self._prev_gamestate.bag_items.values())
@@ -32,6 +37,7 @@ class PolarisRedMetrics:
                 elif gamestate.is_at_pokemart:
                     self.shopping += 1
 
+        self.roll_party_count += int(not gamestate.is_in_battle and event == CustomEvent.ROLL_PARTY)
 
         self._prev_gamestate = gamestate
 
@@ -54,7 +60,7 @@ class PolarisRedMetrics:
             "party_pokemons": np.array(pokemons), # pass a numpy array to interpret this as a barplot
             "party_count": final_gamestate.party_count,  # pass a numpy array to interpret this as a barplot
             "party_level_min": np.min(final_gamestate.party_level),  # pass a numpy array to interpret this as a barplot
-
+            "roll_party_count": self.roll_party_count,
             "money": final_gamestate.player_money,
             "num_triggered_flags": np.sum(final_gamestate.event_flags)
         }

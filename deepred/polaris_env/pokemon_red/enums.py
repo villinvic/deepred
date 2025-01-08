@@ -20,6 +20,7 @@ class RamLocation(IntEnum):
     PARTY_0_MOVE2_PP = 0xD18A
     PARTY_0_MOVE3_PP = 0xD18B
     PARTY_SENT_OUT = 0xCC35 # swapping pos
+    OPPONENT_PARTY_START = 0xD8A4
     OPPONENT_PARTY_COUNT = 0xD89C
     OPPONENT_POKEMON_0_SPECIES = 0xD8A4
     OPPONENT_POKEMON_0_TYPE0 = 0xD8A9
@@ -123,6 +124,7 @@ class RamLocation(IntEnum):
     BOX_POKEMON_COUNT = 0xDA80
     BOX_POKEMON_START = 0xDA96
     BOX_POKEMON_SPECIES_START = 0xDA81
+    BOX_POKEMON_TYPES_START = 0xDA9B
 
     BOX_NICKNAMES_START = 0xDE06
 
@@ -176,6 +178,16 @@ class Orientation(IntEnum):
     LEFT = 8
     RIGHT = 12
 
+
+class GrowthRate(IntEnum):
+    MEDIUM_FAST = 0
+    SLIGHTLY_FAST = 1
+    SLIGHTLY_SLOW = 2
+    MEDIUM_SLOW = 3
+    FAST = 4
+    SLOW = 5
+
+
 class FieldMove(IntEnum):
     CUT = 1
     SURF = 3
@@ -189,27 +201,6 @@ class Badges(IntEnum):
     MARSH   = 5
     VOLCANO = 6
     EARTH   = 7
-    
-class PokemonType(IntEnum):
-    NORMAL       = 0x00
-    FIGHTING     = 0x01
-    FLYING       = 0x02
-    POISON       = 0x03
-    GROUND       = 0x04
-    ROCK         = 0x05
-    BIRD         = 0x06
-    BUG          = 0x07
-    GHOST        = 0x08
-    # Unused types here
-    ...
-    # 
-    FIRE         = 0x14
-    WATER        = 0x15
-    GRASS        = 0x16
-    ELECTRIC     = 0x17
-    PSYCHIC_TYPE = 0x18
-    ICE          = 0x19
-    DRAGON       = 0x1A
 
     
 class TileSet(IntEnum):
@@ -471,6 +462,12 @@ class FixedPokemonType(IntEnum):
     ICE          = 0x0E
     DRAGON       = 0x0F
     NO_TYPE      = 0x10
+
+    def unfix(self) -> "PokemonType":
+        value = self._value_
+        if value >= 9:
+            value += 11
+        return PokemonType(value)
 
 
 class Pokemon(IntEnum):
