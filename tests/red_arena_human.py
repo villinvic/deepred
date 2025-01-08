@@ -26,8 +26,8 @@ def run(
         opponent_level_std_max: int = 3,
         wild_battle_chance: float = 1.,
 ):
-    envs = [PolarisRedArena(
-        env_index=i,
+    env = PolarisRedArena(
+        env_index=0,
         game_path=game_path,
         episode_length=episode_length,
         human_inputs=human_inputs,
@@ -47,32 +47,19 @@ def run(
         opponent_level_std_max=opponent_level_std_max,
         wild_battle_chance=wild_battle_chance
 
-    ) for i in range(1)
-    ]
-    env0 = envs[0]
+    )
 
 
-    for env in envs:
-        env.reset()
-
+    env.reset()
     action = None
 
     for i in range(500):
-        if not env0.input_interface.human_inputs:
-            action = env0.action_space.sample()
+        if not env.input_interface.human_inputs:
+            action = env.action_space.sample()
             time.sleep(0.25)
 
-        env_outputs = []
-        for env in envs:
-            observations, rewards, _, _, _ = env.step({0: action})
-            env_outputs.append((observations, rewards, env.console.get_gamestate()))
+        observations, rewards, _, _, _ = env.step({0: action})
 
-
-        for env in envs:
-            gs = env.console.get_gamestate()
-            # print(gs.party_moves, gs.party_pps, gs.party_types, gs.party_attributes)
-            # print(gs.sent_out_party_moves, gs.sent_out_party_pps, gs.sent_out_party_types, gs.sent_out_party_attributes)
-            # print(gs.sent_out_opponent_moves, gs.sent_out_opponent_pps, gs.sent_out_opponent_types, gs.sent_out_opponent_attributes)
 
 
 

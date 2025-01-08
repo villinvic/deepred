@@ -182,12 +182,30 @@ class SampledPokemon(NamedTuple):
             index: int,
             is_opponent: bool
     ):
+        """
+        :param ram: ram to modify
+        :param index: index of the pokemon in the party (0 for leading / wild pokemon)
+        :param is_opponent: if this is about the opponent / wild pokemon
+        """
+
+
         if is_opponent:
-            addresses = [] # [RamLocation.OPPONENT_PARTY_START]
-            if index == 0:
-                addresses += [RamLocation.WILD_POKEMON_SPECIES]
+            addresses = [RamLocation.OPPONENT_PARTY_START]
+
+            # sent out pokemon (addresses are setup differently here)
+            # if index == 0:
+            #     addresses += [RamLocation.WILD_POKEMON_SPECIES]
+
+            # look into https://datacrystal.tcrf.net/wiki/Pok%C3%A9mon_Red_and_Blue/RAM_map#Battle
+            #           https://datacrystal.tcrf.net/wiki/Pok%C3%A9mon_Red_and_Blue/RAM_map#Opponent_Trainer%E2%80%99s_Pok%C3%A9mon
+            # look into how the game handles wild encounters, and trainer battle initialisation: https://github.com/pret/pokered
+            # also into opponent_sent_out_pokemon_stats.py (line 638)
+
+            # TODO: modify the ram of the opponent pokemon
+
+
         else:
-            addresses = [RamLocation.PARTY_START]
+            addr = RamLocation.PARTY_START
             poke_name = self.stats.pokemon.name
             for offset in range(0, DataStructDimension.POKEMON_NICKNAME):
                 if offset < len(poke_name):
@@ -196,14 +214,16 @@ class SampledPokemon(NamedTuple):
                     c = CHARMAP["<NULL>"]
                 ram[RamLocation.PARTY_NICKNAMES_START + index * DataStructDimension.POKEMON_NICKNAME + offset] = c
 
+            # we also have to set the species here for our party
+            ram[RamLocation.PARTY_0_ID + index] = self.stats.pokemon
 
-        scaled_stats = self.stats.scale()
 
-        pokemon_data = PokemonDatas[self.stats.pokemon]
+            scaled_stats = self.stats.scale()
 
-        for addr in addresses:
+            pokemon_data = PokemonDatas[self.stats.pokemon]
 
-            ram[addr + index] = self.stats.pokemon
+
+            ram[addr + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
             # level
             ram[addr + index * DataStructDimension.POKEMON_STATS + 33] = self.stats.level
             # 'level'
@@ -268,13 +288,11 @@ class SampledBattle(NamedTuple):
             self,
             ram
     ):
-        # print("Injecting bag:")
-        # print(self.bag)
-        # inject_bag_to_ram(ram, self.bag)
-        # print("Injecting teams:")
-        # print(self.teams)
-        for i, is_opponent in enumerate([False]):
-            inject_team_to_ram(ram, self.teams[i], is_opponent=is_opponent)
+
+        inject_bag_to_ram(ram, self.bag)
+        inject_team_to_ram(ram, self.teams[0], is_opponent=False)
+        #inject_team_to_ram(ram, self.teams[1], is_opponent=True)
+
 
 
 
@@ -476,10 +494,18 @@ def inject_team_to_ram(
     else:
         party_count_addr = RamLocation.PARTY_COUNT
 
-    ram[party_count_addr] = 2 # len(team)
+    # debug with only one pokemon
+    # with more that one pokemons, the other pokemons in the pary are invisible...?
+    # also, opponent pokemons do not change, check into the ram if the values we set are not reset to something else
+    # at some point.
 
-    for i, pokemon in enumerate(team[:2]):
+    team = team[:1]
+
+    for i, pokemon in enumerate(team):
         pokemon.inject_at(ram, i, is_opponent=is_opponent)
+
+    ram[party_count_addr] = len(team)
+
 
 
 

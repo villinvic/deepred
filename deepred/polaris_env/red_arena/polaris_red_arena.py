@@ -6,8 +6,8 @@ from polaris.environments import PolarisEnv
 
 from deepred.polaris_env.action_space import PolarisRedActionSpace
 from deepred.polaris_env.gb_console import GBConsole
-from deepred.polaris_env.observation_space import PolarisRedObservationSpace
 from deepred.polaris_env.pokemon_red.enums import RamLocation
+from deepred.polaris_env.red_arena.observation_space import PolarisRedArenaObservationSpace
 from deepred.polaris_env.red_arena.battle_sampler import BattleSampler
 from deepred.polaris_env.red_arena.rewards import PolarisRedArenaRewardFunction
 
@@ -24,27 +24,15 @@ class PolarisRedArena(PolarisEnv):
     Functionality:
     -> resets the game on battle startup
     -> can roll party as much as desired on startup
-    -> on the first a press, the battle starts
-    -> episode ends when the battle is won, or when maximum number of steps is reached
+    -> on the first button press, the battle starts
+    -> episode ends when the battle is finished, or when maximum number of steps is reached
 
 
-    TODO:
-    -> implement all functions
-    -> generate a set of savestates for battling (only Trainer Battles, no wild battles)
-        -> must start the game with a battle about to start
-        -> randomly sample a battle injected to ram (battle_sampler)
 
+    ----------
+    For later:
     -> Implement a specific trainer (arena_trainer.py) (Victor) to train agents on this environment.
-
-    Later:
-    -> mix Wild pokemon battles with Trainer Battles in order to learn when to
-        -> catch
-        -> get exp
-        -> run away
-
-
-
-    Goals:
+    Final Goals:
     -> test what kind of neural network works best for battling in pokemon red
     -> get an agent that learns to:
         -> win battles
@@ -118,17 +106,17 @@ class PolarisRedArena(PolarisEnv):
             checkpoint_identifiers=None,
             **config
         )
+
         # We perform a reset + tick to get the gamestate.
         sampled_battle = self.battle_sampler()
         self.console.reset(sampled_battle)
 
-        self.observation_interface = PolarisRedObservationSpace(
+        self.observation_interface = PolarisRedArenaObservationSpace(
             downscaled_screen_shape=downscaled_screen_shape,
             framestack=framestack,
             stack_oldest_only=stack_oldest_only,
             dummy_gamestate=self.console.tick()
         )
-
 
         self.input_interface = PolarisRedActionSpace(
             enable_start=False,
@@ -156,16 +144,37 @@ class PolarisRedArena(PolarisEnv):
         """
         Called each time we want to initialise the environment for a new episode
 
-        ->
+        TODO
         """
         sampled_battle = self.battle_sampler()
-        gamestate = self.console.reset(sampled_battle)
+        initial_gamestate = self.console.reset(sampled_battle)
 
-        # add a hook to the tick function so that we ensure we have the right pokemons
+        # add a hook to the console tick function
+        # so that we update the ram each frame before the battle begins
         setattr(self.console, "old_tick", self.console.tick)
+
+        ram_to_observe = [
+            RamLocation.WILD_POKEMON_SPECIES,
+            # other stuff
+        ]
+        def print_ram_values():
+            for addr in ram_to_observe:
+                print(f"{addr.name:<30}: {self.console.memory[RamLocation.WILD_POKEMON_SPECIES]}")
+
         def hook(count, render):
+            print(count)
+
+            print("-----RAM BEFORE GAME UPDATE-----")
+            print_ram_values()
             gs = self.console.old_tick(count, render)
-            sampled_battle.inject_to_ram(self.console.memory)
+            print("-----RAM AFTER GAME UPDATE -----")
+            print_ram_values()
+
+
+            if True or not gs.is_in_battle: # I don't know until when we should inject the values...
+                                    # for sure we do not want to keep injecting them mid battle though !
+                sampled_battle.inject_to_ram(self.console.memory)
+
             return gs
 
         setattr(self.console, "tick", hook)
@@ -173,41 +182,45 @@ class PolarisRedArena(PolarisEnv):
 
         self.input_dict = self.observation_space.sample()
         self.observation_interface.inject(
-            gamestate,
+            initial_gamestate,
             self.input_dict
         )
         self.step_count = 0
 
+        # c.f. polaris_red.py to update the observations.
         return {0: self.input_dict}, self.empty_info_dict
-
-
 
     def step(
         self,
         action_dict
     ):
-        action = action_dict[0]
+        """
+        TODO
+        """
 
+        action = action_dict[0]
         event = self.input_interface.get_event(action, self.console.get_gamestate())
         self.console.process_event(event)
-
-        done = {
+        dones = {
             "__all__": False,
             0: False,
         }
+        rewards = {
+            0: 0 # our agent is 0
+        }
+        observations = {
+            0: self.input_dict # c.f. polaris_red.py to update the observations.
+        }
 
-        return {0: self.input_dict}, {0: 0}, done, done, self.empty_info_dict
-
-
+        # you should only modify how we get observations, rewards and dones
+        return observations, rewards, dones, dones, self.empty_info_dict
 
     def get_episode_metrics(self) -> dict:
         """
+        TODO
         :return: metrics for the episode (reported to wandb)
         """
 
         metrics = {}
-
-        # TODO
-
 
         return metrics

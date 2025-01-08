@@ -13,7 +13,7 @@ from deepred.polaris_env.observation_space import RamObservation, ObsType, Pixel
 from deepred.polaris_env.pokemon_red.enums import BattleType, FixedPokemonType, Move, BagItem
 
 
-class PolarisRedObservationSpace:
+class PolarisRedArenaObservationSpace:
 
     def __init__(
             self,
@@ -27,6 +27,9 @@ class PolarisRedObservationSpace:
         :param downscaled_screen_shape: final shape of the pixel observation after downscaled.
         :param framestack: number of frames to stack on top of each other for pixel observations.
         :param stack_oldest_only: whether to only stack the oldest frame in the stack on top of the current frame.
+
+        This is a simpler version than PolarisRedObservationSpace, where all observations irrelevant to battles were
+        evinced.
         """
 
         base_ram_observations = dict(
