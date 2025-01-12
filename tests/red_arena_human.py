@@ -14,7 +14,7 @@ def run(
         stack_oldest_only: bool = False,
         enabled_patches: Tuple[str] = ("out_of_cash_safari", "infinite_time_safari", "instantaneous_text", "nerf_spinners",
                                     "victory_road", "elevator", "freshwater_trade", "seafoam_island"),
-        reward_scales=dict(win=1),
+        reward_scales=dict(experience=1, win=1, fainting=1, timeout=-1),
         session_path: str = "red_arena_tests",
         speed_limit: int = 1,
         render: bool = True,

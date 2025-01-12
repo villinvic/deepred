@@ -1,4 +1,4 @@
-# Implementation of RedArena
+ # Implementation of RedArena
 
 This document outlines the steps to implement **RedArena** based on the existing framework provided by classes like `PolarisRed`, `PolarisRedRewardFunction`, and others. Follow the objectives below in order.
 

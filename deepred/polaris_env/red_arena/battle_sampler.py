@@ -190,7 +190,7 @@ class SampledPokemon(NamedTuple):
 
 
         if is_opponent:
-            addresses = [RamLocation.OPPONENT_PARTY_START]
+            addr = RamLocation.OPPONENT_PARTY_START
 
             # sent out pokemon (addresses are setup differently here)
             # if index == 0:
@@ -202,6 +202,8 @@ class SampledPokemon(NamedTuple):
             # also into opponent_sent_out_pokemon_stats.py (line 638)
 
             # TODO: modify the ram of the opponent pokemon
+            addr = RamLocation.WILD_POKEMON_SPECIES
+            ram[addr + 33] = 99
 
 
         else:
@@ -216,7 +218,6 @@ class SampledPokemon(NamedTuple):
 
             # we also have to set the species here for our party
             ram[RamLocation.PARTY_0_ID + index] = self.stats.pokemon
-
 
             scaled_stats = self.stats.scale()
 
@@ -291,7 +292,7 @@ class SampledBattle(NamedTuple):
 
         inject_bag_to_ram(ram, self.bag)
         inject_team_to_ram(ram, self.teams[0], is_opponent=False)
-        #inject_team_to_ram(ram, self.teams[1], is_opponent=True)
+        inject_team_to_ram(ram, self.teams[1], is_opponent=True)
 
 
 
@@ -503,9 +504,7 @@ def inject_team_to_ram(
 
     for i, pokemon in enumerate(team):
         pokemon.inject_at(ram, i, is_opponent=is_opponent)
-
     ram[party_count_addr] = len(team)
-
 
 
 

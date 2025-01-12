@@ -76,7 +76,7 @@ class SynchronousTrainer(Checkpointable):
         }
 
 
-        # I think this does not help the agent exploe like we want
+        # I think this does not help the agent explore like we want
         self.visitation_counts: Dict[str, VisitationCounts] = {
             pid: VisitationCounts(self.config)
             for pid in self.policy_map

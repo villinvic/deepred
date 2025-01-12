@@ -157,13 +157,15 @@ class PolarisRedArena(PolarisEnv):
             RamLocation.WILD_POKEMON_SPECIES,
             # other stuff
         ]
+        self.reward_function = PolarisRedArenaRewardFunction(
+            reward_scales=self.reward_scales,
+            inital_gamestate=initial_gamestate,
+        )
         def print_ram_values():
             for addr in ram_to_observe:
                 print(f"{addr.name:<30}: {self.console.memory[RamLocation.WILD_POKEMON_SPECIES]}")
 
         def hook(count, render):
-            print(count)
-
             print("-----RAM BEFORE GAME UPDATE-----")
             print_ram_values()
             gs = self.console.old_tick(count, render)
@@ -194,26 +196,37 @@ class PolarisRedArena(PolarisEnv):
         self,
         action_dict
     ):
-        """
-        TODO
-        """
 
-        action = action_dict[0]
-        event = self.input_interface.get_event(action, self.console.get_gamestate())
-        self.console.process_event(event)
+        event = self.input_interface.get_event(action_dict[0], self.console.get_gamestate())
+
+        gamestate = self.console.process_event(event)
+
+        rewards = self.reward_function.compute_step_rewards(gamestate)
+        self.observation_interface.inject(
+            gamestate,
+            self.input_dict
+        )
+
+        # Will see if is_lazy can be useful to be True
+        """early_termination = self.reward_function.is_lazy()
+        if early_termination:
+            rewards -= self.reward_scales["early_termination"]"""
+
+        self.step_count += 1
+        done = self.step_count >= self.episode_length# or early_termination
         dones = {
-            "__all__": False,
-            0: False,
+            "__all__": done,
+            0: done,
         }
-        rewards = {
-            0: 0 # our agent is 0
-        }
-        observations = {
-            0: self.input_dict # c.f. polaris_red.py to update the observations.
-        }
+
+        if done or gamestate._additional_memory.battle_staling_checker.is_battle_staling():
+            self.on_episode_end()
 
         # you should only modify how we get observations, rewards and dones
-        return observations, rewards, dones, dones, self.empty_info_dict
+        return {0: self.input_dict}, rewards, dones, dones, self.empty_info_dict
+
+    def on_episode_end(self):
+        self.console.terminate_video()
 
     def get_episode_metrics(self) -> dict:
         """
