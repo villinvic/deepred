@@ -133,7 +133,7 @@ class PolarisRedArena(PolarisEnv):
         self.input_dict: Union[Dict, None] = None
 
         self.reward_scales = reward_scales
-
+        self.done = False
 
     def reset(
         self,
@@ -154,8 +154,12 @@ class PolarisRedArena(PolarisEnv):
         setattr(self.console, "old_tick", self.console.tick)
 
         ram_to_observe = [
-            RamLocation.WILD_POKEMON_SPECIES,
-            # other stuff
+            RamLocation.ENEMY_POKEMON_SPECIES,
+            RamLocation.ENEMY_POKEMON_ID,
+            RamLocation.ENEMY_POKEMON_TYPE0,
+            RamLocation.ENEMY_POKEMON_TYPE1,
+            RamLocation.ENEMY_POKEMON_MOVE0,
+            RamLocation.ENEMY_POKEMON_MOVE1,
         ]
         self.reward_function = PolarisRedArenaRewardFunction(
             reward_scales=self.reward_scales,
@@ -163,7 +167,7 @@ class PolarisRedArena(PolarisEnv):
         )
         def print_ram_values():
             for addr in ram_to_observe:
-                print(f"{addr.name:<30}: {self.console.memory[RamLocation.WILD_POKEMON_SPECIES]}")
+                print(f"{addr.name:<30}: {self.console.memory[addr]}")
 
         def hook(count, render):
             print("-----RAM BEFORE GAME UPDATE-----")
@@ -173,9 +177,13 @@ class PolarisRedArena(PolarisEnv):
             print_ram_values()
 
 
-            if True or not gs.is_in_battle: # I don't know until when we should inject the values...
-                                    # for sure we do not want to keep injecting them mid battle though !
+            if not gs.is_in_battle:
                 sampled_battle.inject_to_ram(self.console.memory)
+            elif not self.done:
+                print("done")
+                self.done = True
+                sampled_battle.inject_to_ram(self.console.memory)
+            #sampled_battle.inject_to_ram(self.console.memory)
 
             return gs
 
@@ -188,7 +196,6 @@ class PolarisRedArena(PolarisEnv):
             self.input_dict
         )
         self.step_count = 0
-
         # c.f. polaris_red.py to update the observations.
         return {0: self.input_dict}, self.empty_info_dict
 
@@ -196,7 +203,6 @@ class PolarisRedArena(PolarisEnv):
         self,
         action_dict
     ):
-
         event = self.input_interface.get_event(action_dict[0], self.console.get_gamestate())
 
         gamestate = self.console.process_event(event)

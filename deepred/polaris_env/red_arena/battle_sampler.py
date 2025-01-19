@@ -175,7 +175,6 @@ class SampledPokemon(NamedTuple):
     stats: PokemonStats
     moves: List[Move]
 
-
     def inject_at(
             self,
             ram,
@@ -187,7 +186,6 @@ class SampledPokemon(NamedTuple):
         :param index: index of the pokemon in the party (0 for leading / wild pokemon)
         :param is_opponent: if this is about the opponent / wild pokemon
         """
-
 
         if is_opponent:
             addr = RamLocation.OPPONENT_PARTY_START
@@ -202,8 +200,52 @@ class SampledPokemon(NamedTuple):
             # also into opponent_sent_out_pokemon_stats.py (line 638)
 
             # TODO: modify the ram of the opponent pokemon
-            addr = RamLocation.WILD_POKEMON_SPECIES
-            ram[addr + 33] = 99
+            addr = RamLocation.ENEMY_POKEMON_SPECIES
+            if index == 0:
+                # Works for trainer
+                # ram[RamLocation.OPPONENT_POKEMON_0_LEVEL] = 16
+                # ram[RamLocation.OPPONENT_POKEMON_0_SPECIES] = 100 #obligatory ?
+                # ram[0xD89D] = 100 #ID Pokemon 1
+
+                ram[RamLocation.ENEMY_POKEMON_SPECIES] = self.stats.pokemon  # ????
+                ram[RamLocation.ENEMY_POKEMON_ID] = self.stats.pokemon
+                ram[RamLocation.ENEMY_LEVEL] = self.stats.level
+                ram[RamLocation.ENEMY_LEVEL + 14] = self.stats.level
+
+                scaled_stats = self.stats.scale()
+                # HP
+                a, b = to_double(scaled_stats.hp)
+                ram[RamLocation.ENEMY_POKEMON_HP] = b
+                ram[RamLocation.ENEMY_POKEMON_HP + 1] = a
+                ram[RamLocation.ENEMY_POKEMON_MAX_HP] = a  # ~work b?
+                ram[RamLocation.ENEMY_POKEMON_MAX_HP + 1] = b  # ~work a?
+
+                # Status
+                ram[RamLocation.ENEMY_POKEMON_STATUS] = 0
+
+                pokemon_data = PokemonDatas[self.stats.pokemon]
+
+                # Types
+                ram[RamLocation.ENEMY_POKEMON_TYPE0] = pokemon_data.types[0].unfix()
+                ram[RamLocation.ENEMY_POKEMON_TYPE1] = pokemon_data.types[1].unfix()
+
+                #  Moves
+                for i, move in enumerate(self.moves + [Move.NO_MOVE] * (4 - len(self.moves))):
+                    ram[RamLocation.ENEMY_POKEMON_MOVE0 + i] = move
+                    ram[RamLocation.ENEMY_POKEMON_MOVE0_PP + i] = MovesInfo[move].pp
+
+                # Catch Rate
+                ram[RamLocation.ENEMY_POKEMON_CATCH_RATE] = pokemon_data.catch_rate
+
+                # Attack/Defense IV
+                # Speed/Special IVs
+                # Attack
+                # Defense
+                # Speed
+                # Special
+                # XP
+            else:
+                ram[RamLocation.OPPONENT_POKEMON_1_LEVEL] = 69
 
 
         else:
@@ -222,7 +264,6 @@ class SampledPokemon(NamedTuple):
             scaled_stats = self.stats.scale()
 
             pokemon_data = PokemonDatas[self.stats.pokemon]
-
 
             ram[addr + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
             # level
@@ -289,12 +330,9 @@ class SampledBattle(NamedTuple):
             self,
             ram
     ):
-
         inject_bag_to_ram(ram, self.bag)
         inject_team_to_ram(ram, self.teams[0], is_opponent=False)
         inject_team_to_ram(ram, self.teams[1], is_opponent=True)
-
-
 
 
 class BattleSampler:
@@ -309,7 +347,7 @@ class BattleSampler:
             self,
             wild_battle_savestate: str,
             trainer_battle_savestate: str,
-            level_mean_bounds: Tuple[int, int]= (5, 60),
+            level_mean_bounds: Tuple[int, int] = (5, 60),
             party_level_std_max: int = 10,
             opponent_level_std_max: int = 3,
             mean_item_quantity: float = 5.,
@@ -335,7 +373,6 @@ class BattleSampler:
         self.mean_item_quantity = mean_item_quantity
         self.mean_num_item_types = mean_num_item_types
         self.wild_battle_chance = wild_battle_chance
-
 
     def __call__(
             self,
@@ -406,18 +443,19 @@ class BattleSampler:
 
         samplable_items = [
             item for item in BagItem if (not ("FLOOR" in item.name or "BADGE" in item.name or "ITEM" in item.name) and
-                                         item!=BagItem.NO_ITEM)
+                                         item != BagItem.NO_ITEM)
         ]
 
         probs = np.exp([
-            BagItemsInfo[item].priority/10 if BagItemsInfo[item].priority != key_item else 1 for item in samplable_items
+            BagItemsInfo[item].priority / 10 if BagItemsInfo[item].priority != key_item else 1 for item in
+            samplable_items
         ])
         probs /= probs.sum()
 
         item_types = np.random.choice(samplable_items, size=num_item_types, p=probs, replace=False)
 
         probs = np.exp([
-            BagItemsInfo[item].priority/10 if BagItemsInfo[item].priority != key_item else 1 for item in item_types
+            BagItemsInfo[item].priority / 10 if BagItemsInfo[item].priority != key_item else 1 for item in item_types
         ])
         probs /= probs.sum()
 
@@ -450,11 +488,10 @@ class BattleSampler:
             exp_max = pokemon_data.get_exp(np.minimum(level + 1, 100))
             exp = int(np.random.uniform(exp_min, exp_max))
 
-
         evs = PokemonBaseStats()
         if not is_opponent:
             evs = tree.map_structure(
-                lambda v: np.random.randint(0, 25600), # max vitamins
+                lambda v: np.random.randint(0, 25600),  # max vitamins
                 evs
             )
 
@@ -481,8 +518,8 @@ class BattleSampler:
         else:
             num_moves = max_moves
 
-
-        return SampledPokemon(stats=pokemon_stats, moves=list(np.random.choice(list(pokemon_data.move_set), size=num_moves, replace=False)))
+        return SampledPokemon(stats=pokemon_stats,
+                              moves=list(np.random.choice(list(pokemon_data.move_set), size=num_moves, replace=False)))
 
 
 def inject_team_to_ram(
@@ -499,14 +536,11 @@ def inject_team_to_ram(
     # with more that one pokemons, the other pokemons in the pary are invisible...?
     # also, opponent pokemons do not change, check into the ram if the values we set are not reset to something else
     # at some point.
-
-    team = team[:1]
+    if is_opponent:
+        team = team[:3]
+    else:
+        team = team[:1]
 
     for i, pokemon in enumerate(team):
         pokemon.inject_at(ram, i, is_opponent=is_opponent)
     ram[party_count_addr] = len(team)
-
-
-
-
-

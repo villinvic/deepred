@@ -75,7 +75,7 @@ class PolarisRedArenaRewardFunction:
 
     ):
         """
-        This class takes care of computing rewards in red arena.
+        This class takes care of computing reward   s in red arena.
         """
 
         self.scales = ArenaGoals() if reward_scales is None else ArenaGoals(**reward_scales)
