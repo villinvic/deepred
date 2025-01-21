@@ -202,23 +202,31 @@ class SampledPokemon(NamedTuple):
             # TODO: modify the ram of the opponent pokemon
             addr = RamLocation.ENEMY_POKEMON_SPECIES
             if index == 0:
-                # Works for trainer
-                # ram[RamLocation.OPPONENT_POKEMON_0_LEVEL] = 16
-                # ram[RamLocation.OPPONENT_POKEMON_0_SPECIES] = 100 #obligatory ?
-                # ram[0xD89D] = 100 #ID Pokemon 1
-
-                ram[RamLocation.ENEMY_POKEMON_SPECIES] = self.stats.pokemon  # ????
+                ram[RamLocation.ENEMY_POKEMON_SPECIES] = self.stats.pokemon
                 ram[RamLocation.ENEMY_POKEMON_ID] = self.stats.pokemon
                 ram[RamLocation.ENEMY_LEVEL] = self.stats.level
                 ram[RamLocation.ENEMY_LEVEL + 14] = self.stats.level
 
+                hp_iv = (
+                        ((self.stats.ivs.attack & 1) << 0) |
+                        ((self.stats.ivs.defense & 1) << 1) |
+                        ((self.stats.ivs.speed & 1) << 2) |
+                        ((self.stats.ivs.special & 1) << 3)
+                )
+
+                ram[0xCFF1] = self.stats.ivs.attack
+                ram[0xCFF2] = self.stats.ivs.speed
+
+                self.stats.ivs = PokemonBaseStats(hp=hp_iv, attack=self.stats.ivs.attack, defense=self.stats.ivs.attack, speed=self.stats.ivs.speed, special=self.stats.ivs.speed)
+
                 scaled_stats = self.stats.scale()
                 # HP
                 a, b = to_double(scaled_stats.hp)
+                ram[RamLocation.ENEMY_POKEMON_MAX_HP] = b
+                ram[RamLocation.ENEMY_POKEMON_MAX_HP + 1] = a
+
                 ram[RamLocation.ENEMY_POKEMON_HP] = b
                 ram[RamLocation.ENEMY_POKEMON_HP + 1] = a
-                ram[RamLocation.ENEMY_POKEMON_MAX_HP] = a  # ~work b?
-                ram[RamLocation.ENEMY_POKEMON_MAX_HP + 1] = b  # ~work a?
 
                 # Status
                 ram[RamLocation.ENEMY_POKEMON_STATUS] = 0
@@ -237,17 +245,84 @@ class SampledPokemon(NamedTuple):
                 # Catch Rate
                 ram[RamLocation.ENEMY_POKEMON_CATCH_RATE] = pokemon_data.catch_rate
 
-                # Attack/Defense IV
-                # Speed/Special IVs
                 # Attack
+                a, b = to_double(scaled_stats.attack)
+                ram[RamLocation.ENEMY_POKEMON_ATTACK] = b
+                ram[RamLocation.ENEMY_POKEMON_ATTACK + 1] = a
+
                 # Defense
+                a, b = to_double(scaled_stats.defense)
+                ram[RamLocation.ENEMY_POKEMON_DEFENSE] = b
+                ram[RamLocation.ENEMY_POKEMON_DEFENSE + 1] = a
+
                 # Speed
+                a, b = to_double(scaled_stats.speed)
+                ram[RamLocation.ENEMY_POKEMON_SPEED] = b
+                ram[RamLocation.ENEMY_POKEMON_SPEED + 1] = a
+
                 # Special
-                # XP
-            else:
-                ram[RamLocation.OPPONENT_POKEMON_1_LEVEL] = 69
+                a, b = to_double(scaled_stats.special)
+                ram[RamLocation.ENEMY_POKEMON_SPECIAL] = b
+                ram[RamLocation.ENEMY_POKEMON_SPECIAL + 1] = a
+
+                # Experience
+                e1, e2, e3 = to_triple(self.stats.exp)
+                ram[RamLocation.ENEMY_POKEMON_EXPERIENCE + index * DataStructDimension.POKEMON_STATS] = e3
 
 
+            if index >= 0:
+                ram[RamLocation.OPPONENT_POKEMON_0_ID + index] = self.stats.pokemon
+                ram[RamLocation.OPPONENT_POKEMON_0_SPECIES + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
+                ram[RamLocation.OPPONENT_POKEMON_0_LEVEL + index * DataStructDimension.POKEMON_STATS] = self.stats.level
+                ram[RamLocation.OPPONENT_POKEMON_0_STATUS + index * DataStructDimension.POKEMON_STATS] = 0
+
+                pokemon_data = PokemonDatas[self.stats.pokemon]
+
+                # Types
+                ram[RamLocation.OPPONENT_POKEMON_0_TYPE0 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[0].unfix()
+                ram[RamLocation.OPPONENT_POKEMON_0_TYPE1 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[1].unfix()
+
+                # Moves
+                for i, move in enumerate(self.moves + [Move.NO_MOVE] * (4 - len(self.moves))):
+                    ram[RamLocation.OPPONENT_POKEMON_0_MOVE0 + i + index * DataStructDimension.POKEMON_STATS] = move
+                    ram[RamLocation.OPPONENT_POKEMON_0_MOVE0_PP + i + index * DataStructDimension.POKEMON_STATS] = MovesInfo[move].pp
+
+                scaled_stats = self.stats.scale()
+
+                # HP
+                a, b = to_double(scaled_stats.hp) # There is modification of maxhp after ~10 frames after the start of the fight
+                ram[RamLocation.OPPONENT_POKEMON_0_MAX_HP + index * DataStructDimension.POKEMON_STATS] = b
+                ram[RamLocation.OPPONENT_POKEMON_0_MAX_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
+
+                ram[RamLocation.OPPONENT_POKEMON_0_HP + index * DataStructDimension.POKEMON_STATS] = b
+                ram[RamLocation.OPPONENT_POKEMON_0_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
+
+                # Attack
+                a, b = to_double(scaled_stats.attack)
+                ram[RamLocation.OPPONENT_POKEMON_0_ATTACK + index * DataStructDimension.POKEMON_STATS] = b
+                ram[RamLocation.OPPONENT_POKEMON_0_ATTACK + 1 + index * DataStructDimension.POKEMON_STATS] = a
+
+                # Defense
+
+                a, b = to_double(scaled_stats.defense)
+                ram[RamLocation.OPPONENT_POKEMON_0_DEFENSE + index * DataStructDimension.POKEMON_STATS] = b
+                ram[RamLocation.OPPONENT_POKEMON_0_DEFENSE + 1 + index * DataStructDimension.POKEMON_STATS] = a
+
+                # Speed
+                a, b = to_double(scaled_stats.speed)
+                ram[RamLocation.OPPONENT_POKEMON_0_SPEED + index * DataStructDimension.POKEMON_STATS] = b
+                ram[RamLocation.OPPONENT_POKEMON_0_SPEED + 1 + index * DataStructDimension.POKEMON_STATS] = a
+
+                # Special
+                a, b = to_double(scaled_stats.special)
+                ram[RamLocation.OPPONENT_POKEMON_0_SPECIAL + index * DataStructDimension.POKEMON_STATS] = b
+                ram[RamLocation.OPPONENT_POKEMON_0_SPECIAL + 1 + index * DataStructDimension.POKEMON_STATS] = a
+
+                # Experience
+                e1, e2, e3 = to_triple(self.stats.exp)
+                ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS] = e3
+                ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 1] = e2
+                ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 2] = e1
         else:
             addr = RamLocation.PARTY_START
             poke_name = self.stats.pokemon.name
@@ -297,9 +372,11 @@ class SampledPokemon(NamedTuple):
             ram[addr + index * DataStructDimension.POKEMON_STATS + 13] = ram[addr + 13]
 
             b1, b2 = to_double(scaled_stats.hp)
+
             # max hp
             ram[addr + index * DataStructDimension.POKEMON_STATS + 34] = b2
             ram[addr + index * DataStructDimension.POKEMON_STATS + 35] = b1
+
             # current hp
             ram[addr + index * DataStructDimension.POKEMON_STATS + 1] = b2
             ram[addr + index * DataStructDimension.POKEMON_STATS + 2] = b1
@@ -380,7 +457,7 @@ class BattleSampler:
         """
         injects the type of battle, the team and opponent's team to the ram.
         """
-        is_wild = np.random.random() < self.wild_battle_chance
+        is_wild = np.random.random() < 0#self.wild_battle_chance
         path = self.wild_battle_savestate if is_wild else self.trainer_battle_savestate
         bag = self.sample_bag()
         global_level_mean = np.random.randint(*self.level_mean_bounds)
@@ -537,9 +614,9 @@ def inject_team_to_ram(
     # also, opponent pokemons do not change, check into the ram if the values we set are not reset to something else
     # at some point.
     if is_opponent:
-        team = team[:3]
-    else:
         team = team[:1]
+    else:
+        team = team[:2]
 
     for i, pokemon in enumerate(team):
         pokemon.inject_at(ram, i, is_opponent=is_opponent)

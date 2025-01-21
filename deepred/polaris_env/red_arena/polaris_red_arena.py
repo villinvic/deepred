@@ -155,11 +155,8 @@ class PolarisRedArena(PolarisEnv):
 
         ram_to_observe = [
             RamLocation.ENEMY_POKEMON_SPECIES,
-            RamLocation.ENEMY_POKEMON_ID,
-            RamLocation.ENEMY_POKEMON_TYPE0,
-            RamLocation.ENEMY_POKEMON_TYPE1,
-            RamLocation.ENEMY_POKEMON_MOVE0,
-            RamLocation.ENEMY_POKEMON_MOVE1,
+            RamLocation.ENEMY_POKEMON_HP_OBSERVATION,
+            RamLocation.ENEMY_POKEMON_MAX_HP_OBSERVATION,
         ]
         self.reward_function = PolarisRedArenaRewardFunction(
             reward_scales=self.reward_scales,
@@ -173,17 +170,15 @@ class PolarisRedArena(PolarisEnv):
             print("-----RAM BEFORE GAME UPDATE-----")
             print_ram_values()
             gs = self.console.old_tick(count, render)
-            print("-----RAM AFTER GAME UPDATE -----")
+            print("-----RAM AFTER GAME UPDATE-----")
             print_ram_values()
 
 
             if not gs.is_in_battle:
                 sampled_battle.inject_to_ram(self.console.memory)
             elif not self.done:
-                print("done")
                 self.done = True
                 sampled_battle.inject_to_ram(self.console.memory)
-            #sampled_battle.inject_to_ram(self.console.memory)
 
             return gs
 

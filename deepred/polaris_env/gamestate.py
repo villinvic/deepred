@@ -405,7 +405,7 @@ class GameState:
             species[i] = self._read(RamLocation.PARTY_0_SPECIES + i * DataStructDimension.POKEMON_STATS)
 
         if self.battle_type == BattleType.WILD:
-            species[6] = self._read(RamLocation.WILD_POKEMON_SPECIES)
+            species[6] = self._read(RamLocation.ENEMY_POKEMON_SPECIES)
 
         elif self.battle_type == BattleType.TRAINER:
             for i in range(self.opponent_party_count):
@@ -489,8 +489,8 @@ class GameState:
         types = np.full((2,), fill_value=FixedPokemonType.NO_TYPE, dtype=np.uint8)
         if self.is_in_battle:
             # also opp sent out types
-            type1 = PokemonType(self._read(RamLocation.WILD_POKEMON_TYPE0)).fix()
-            type2 = PokemonType(self._read(RamLocation.WILD_POKEMON_TYPE1)).fix()
+            type1 = PokemonType(self._read(RamLocation.ENEMY_POKEMON_TYPE0)).fix()
+            type2 = PokemonType(self._read(RamLocation.ENEMY_POKEMON_TYPE1)).fix()
             if type1 == type2:
                 type2 = FixedPokemonType.NO_TYPE
             types[:] = type1, type2
@@ -531,10 +531,10 @@ class GameState:
         moves = np.zeros((4,), dtype=np.uint8)
         if self.is_in_battle:
             # also opp sent out moves
-            move0 = self._read(RamLocation.WILD_POKEMON_MOVE0)
-            move1 = self._read(RamLocation.WILD_POKEMON_MOVE1)
-            move2 = self._read(RamLocation.WILD_POKEMON_MOVE2)
-            move3 = self._read(RamLocation.WILD_POKEMON_MOVE3)
+            move0 = self._read(RamLocation.ENEMY_POKEMON_MOVE0)
+            move1 = self._read(RamLocation.ENEMY_POKEMON_MOVE1)
+            move2 = self._read(RamLocation.ENEMY_POKEMON_MOVE2)
+            move3 = self._read(RamLocation.ENEMY_POKEMON_MOVE3)
             moves[:] = move0, move1, move2, move3
 
         return moves
@@ -570,10 +570,10 @@ class GameState:
         """
         moves = np.zeros((4,), dtype=np.uint8)
         if self.is_in_battle:
-            move0 = self._read(RamLocation.WILD_POKEMON_MOVE0_PP)
-            move1 = self._read(RamLocation.WILD_POKEMON_MOVE1_PP)
-            move2 = self._read(RamLocation.WILD_POKEMON_MOVE2_PP)
-            move3 = self._read(RamLocation.WILD_POKEMON_MOVE3_PP)
+            move0 = self._read(RamLocation.ENEMY_POKEMON_MOVE0_PP)
+            move1 = self._read(RamLocation.ENEMY_POKEMON_MOVE1_PP)
+            move2 = self._read(RamLocation.ENEMY_POKEMON_MOVE2_PP)
+            move3 = self._read(RamLocation.ENEMY_POKEMON_MOVE3_PP)
             moves[:] = move0, move1, move2, move3
         return moves
 
@@ -642,7 +642,7 @@ class GameState:
         Returns a list of pokemon attributes (15) for battling opponent pokemons
         # TODO: think if we move this kind of function into the observation space module...
         """
-        start_address = RamLocation.WILD_POKEMON_SPECIES
+        start_address = RamLocation.ENEMY_POKEMON_SPECIES
 
         atk_mod = get_stat_modifier(self._read(RamLocation.OPP_MODIFIER_START))
         def_mod = get_stat_modifier(self._read(RamLocation.OPP_MODIFIER_START+1))
@@ -686,20 +686,20 @@ class GameState:
         if self.is_in_battle:
             if self.battle_type == BattleType.WILD:
                 attributes[6] = self.opponent_sent_out_pokemon_stats_at_index(
-                            RamLocation.WILD_POKEMON_SPECIES,  # this is also the address for opponent sent out pokemons.
+                            RamLocation.ENEMY_POKEMON_SPECIES,  # this is also the address for opponent sent out pokemons.
                             party_pokemon=False,
                             position=0,
-                            wild_pokemon=True,
+                            ENEMY_pokemon=True,
                         )
 
             elif self.battle_type == BattleType.TRAINER:
                 for i in range(self.opponent_party_count):
                     if i == self._read(RamLocation.OPPONENT_POKEMON_SENT_OUT):
                         attributes[i + 6] = self.opponent_sent_out_pokemon_stats_at_index(
-                            RamLocation.WILD_POKEMON_SPECIES, # this is also the address for opponent sent out pokemons.
+                            RamLocation.ENEMY_POKEMON_SPECIES, # this is also the address for opponent sent out pokemons.
                             party_pokemon=False,
                             position=i,
-                            wild_pokemon=False,
+                            ENEMY_pokemon=False,
                         )
                     else:
                         attributes[i + 6] = self.party_pokemon_stats_at_index(
