@@ -209,9 +209,9 @@ class SampledPokemon(NamedTuple):
 
                 hp_iv = (
                         ((self.stats.ivs.attack & 1) << 0) |
-                        ((self.stats.ivs.defense & 1) << 1) |
+                        ((self.stats.ivs.attack & 1) << 1) |
                         ((self.stats.ivs.speed & 1) << 2) |
-                        ((self.stats.ivs.special & 1) << 3)
+                        ((self.stats.ivs.speed & 1) << 3)
                 )
 
                 ram[0xCFF1] = self.stats.ivs.attack
@@ -335,67 +335,73 @@ class SampledPokemon(NamedTuple):
 
             # we also have to set the species here for our party
             ram[RamLocation.PARTY_0_ID + index] = self.stats.pokemon
+            ram[RamLocation.PARTY_0_SPECIES + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
+
+            # Status
+            ram[RamLocation.PARTY_0_STATUS + index * DataStructDimension.POKEMON_STATS] = 0
 
             scaled_stats = self.stats.scale()
-
             pokemon_data = PokemonDatas[self.stats.pokemon]
 
-            ram[addr + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
+            # Types
+            ram[RamLocation.OPPONENT_POKEMON_0_TYPE0 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[0].unfix()
+            ram[RamLocation.OPPONENT_POKEMON_0_TYPE1 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[1].unfix()
+
             # level
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 33] = self.stats.level
+            ram[RamLocation.PARTY_0_LEVEL + index * DataStructDimension.POKEMON_STATS] = self.stats.level
             # 'level'
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 3] = self.stats.level
-
-            # status
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 4] = 0
-
-            # types
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 5] = pokemon_data.types[0].unfix()
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 6] = pokemon_data.types[1].unfix()
+            ram[RamLocation.PARTY_0_FAKE_LEVEL + index * DataStructDimension.POKEMON_STATS] = self.stats.level
 
             # catch rate
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 7] = pokemon_data.catch_rate
+            ram[RamLocation.PARTY_0_CATCH_RATE + index * DataStructDimension.POKEMON_STATS] = pokemon_data.catch_rate
 
             # exp
             e1, e2, e3 = to_triple(self.stats.exp)
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 14] = e3
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 15] = e2
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 16] = e1
+            ram[RamLocation.PARTY_0_EXP + index * DataStructDimension.POKEMON_STATS] = e3
+            ram[RamLocation.PARTY_0_EXP + index * DataStructDimension.POKEMON_STATS + 1] = e2
+            ram[RamLocation.PARTY_0_EXP + index * DataStructDimension.POKEMON_STATS + 2] = e1
 
             # moves and pps
             for i, move in enumerate(self.moves + [Move.NO_MOVE] * (4 - len(self.moves))):
-                ram[addr + index * DataStructDimension.POKEMON_STATS + 8 + i] = move
-                ram[addr + index * DataStructDimension.POKEMON_STATS + 29 + i] = MovesInfo[move].pp
+                ram[RamLocation.PARTY_0_MOVE0 + i + index * DataStructDimension.POKEMON_STATS] = move
+                ram[RamLocation.PARTY_0_MOVE0_PP + i + index * DataStructDimension.POKEMON_STATS] = MovesInfo[move].pp
 
             # trainer ID (use the ID of pokemon 1)
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 12] = ram[addr + 12]
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 13] = ram[addr + 13]
+            ram[RamLocation.PARTY_0_TRAINER_ID + index * DataStructDimension.POKEMON_STATS] = ram[RamLocation.PARTY_0_TRAINER_ID]
+            ram[RamLocation.PARTY_0_TRAINER_ID + index * DataStructDimension.POKEMON_STATS] = ram[RamLocation.PARTY_0_TRAINER_ID + 1]
 
             b1, b2 = to_double(scaled_stats.hp)
 
             # max hp
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 34] = b2
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 35] = b1
+            ram[RamLocation.PARTY_0_MAXHP + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_MAXHP + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
             # current hp
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 1] = b2
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 2] = b1
+            ram[RamLocation.PARTY_0_HP + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_HP + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
+            # Attack
             b1, b2 = to_double(scaled_stats.attack)
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 34 + 2] = b2
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 35 + 2] = b1
+            ram[RamLocation.PARTY_0_ATTACK + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_ATTACK + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
+            # Defense
             b1, b2 = to_double(scaled_stats.defense)
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 34 + 4] = b2
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 35 + 4] = b1
+            ram[RamLocation.PARTY_0_DEFENSE + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_DEFENSE + index * DataStructDimension.POKEMON_STATS+ 1] = b1
 
+            # Speed
             b1, b2 = to_double(scaled_stats.speed)
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 34 + 6] = b2
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 35 + 6] = b1
+            ram[RamLocation.PARTY_0_SPEED + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_SPEED + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
+            # Special
             b1, b2 = to_double(scaled_stats.special)
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 34 + 8] = b2
-            ram[addr + index * DataStructDimension.POKEMON_STATS + 35 + 8] = b1
+            ram[RamLocation.PARTY_0_SPECIAL + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_SPECIAL + index * DataStructDimension.POKEMON_STATS + 1] = b1
+
+            #EVs
+
 
 
 class SampledBattle(NamedTuple):
@@ -616,7 +622,7 @@ def inject_team_to_ram(
     if is_opponent:
         team = team[:1]
     else:
-        team = team[:2]
+        team = team[:3]
 
     for i, pokemon in enumerate(team):
         pokemon.inject_at(ram, i, is_opponent=is_opponent)
