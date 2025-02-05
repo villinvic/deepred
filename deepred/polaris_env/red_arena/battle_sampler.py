@@ -188,19 +188,11 @@ class SampledPokemon(NamedTuple):
         """
 
         if is_opponent:
-            addr = RamLocation.OPPONENT_PARTY_START
-
-            # sent out pokemon (addresses are setup differently here)
-            # if index == 0:
-            #     addresses += [RamLocation.WILD_POKEMON_SPECIES]
-
             # look into https://datacrystal.tcrf.net/wiki/Pok%C3%A9mon_Red_and_Blue/RAM_map#Battle
             #           https://datacrystal.tcrf.net/wiki/Pok%C3%A9mon_Red_and_Blue/RAM_map#Opponent_Trainer%E2%80%99s_Pok%C3%A9mon
             # look into how the game handles wild encounters, and trainer battle initialisation: https://github.com/pret/pokered
             # also into opponent_sent_out_pokemon_stats.py (line 638)
 
-            # TODO: modify the ram of the opponent pokemon
-            addr = RamLocation.ENEMY_POKEMON_SPECIES
             if index == 0:
                 ram[RamLocation.ENEMY_POKEMON_SPECIES] = self.stats.pokemon
                 ram[RamLocation.ENEMY_POKEMON_ID] = self.stats.pokemon
@@ -324,7 +316,6 @@ class SampledPokemon(NamedTuple):
                 ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 1] = e2
                 ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 2] = e1
         else:
-            addr = RamLocation.PARTY_START
             poke_name = self.stats.pokemon.name
             for offset in range(0, DataStructDimension.POKEMON_NICKNAME):
                 if offset < len(poke_name):
@@ -368,7 +359,7 @@ class SampledPokemon(NamedTuple):
 
             # trainer ID (use the ID of pokemon 1)
             ram[RamLocation.PARTY_0_TRAINER_ID + index * DataStructDimension.POKEMON_STATS] = ram[RamLocation.PARTY_0_TRAINER_ID]
-            ram[RamLocation.PARTY_0_TRAINER_ID + index * DataStructDimension.POKEMON_STATS] = ram[RamLocation.PARTY_0_TRAINER_ID + 1]
+            ram[RamLocation.PARTY_0_TRAINER_ID + index * DataStructDimension.POKEMON_STATS + 1] = ram[RamLocation.PARTY_0_TRAINER_ID + 1]
 
             b1, b2 = to_double(scaled_stats.hp)
 
@@ -400,8 +391,43 @@ class SampledPokemon(NamedTuple):
             ram[RamLocation.PARTY_0_SPECIAL + index * DataStructDimension.POKEMON_STATS] = b2
             ram[RamLocation.PARTY_0_SPECIAL + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
-            #EVs
+            # HP Ev
+            b1, b2 = to_double(self.stats.evs.hp)
+            ram[RamLocation.PARTY_0_HP_EV + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_HP_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
+            #Attack EV
+            b1, b2 = to_double(self.stats.evs.attack)
+            ram[RamLocation.PARTY_0_ATTACK_EV + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_ATTACK_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
+
+            # Defense EV
+            b1, b2 = to_double(self.stats.evs.defense)
+            ram[RamLocation.PARTY_0_DEFENSE_EV + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_DEFENSE_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
+
+            # Speed EV
+            b1, b2 = to_double(self.stats.evs.speed)
+            ram[RamLocation.PARTY_0_SPEED_EV + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_SPEED_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
+
+            # Special EV
+            b1, b2 = to_double(self.stats.evs.special)
+            ram[RamLocation.PARTY_0_SPECIAL_EV + index * DataStructDimension.POKEMON_STATS] = b2
+            ram[RamLocation.PARTY_0_SPECIAL_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
+
+            # IVs
+            hp_iv = (
+                    ((self.stats.ivs.attack & 1) << 0) |
+                    ((self.stats.ivs.attack & 1) << 1) |
+                    ((self.stats.ivs.speed & 1) << 2) |
+                    ((self.stats.ivs.speed & 1) << 3)
+            )
+            self.stats.ivs = PokemonBaseStats(hp=hp_iv, attack=self.stats.ivs.attack, defense=self.stats.ivs.attack,
+                                              speed=self.stats.ivs.speed, special=self.stats.ivs.speed)
+
+            ram[RamLocation.PARTY_0_ATTACK_DEFENSE_IV] = self.stats.ivs.attack
+            ram[RamLocation.PARTY_0_SPEED_SPECIAL_IV] = self.stats.ivs.speed
 
 
 class SampledBattle(NamedTuple):
@@ -463,7 +489,7 @@ class BattleSampler:
         """
         injects the type of battle, the team and opponent's team to the ram.
         """
-        is_wild = np.random.random() < 0#self.wild_battle_chance
+        is_wild = np.random.random() < 1#self.wild_battle_chance
         path = self.wild_battle_savestate if is_wild else self.trainer_battle_savestate
         bag = self.sample_bag()
         global_level_mean = np.random.randint(*self.level_mean_bounds)
@@ -479,7 +505,7 @@ class BattleSampler:
             self.sample_team(
                 level_mean=int(np.clip(np.random.normal(global_level_mean, global_level_std), *self.level_mean_bounds)),
                 level_std=np.random.uniform(0, self.opponent_level_std_max),
-                is_opponent=False,
+                is_opponent=True,
                 is_wild=is_wild)
         )
 
@@ -614,16 +640,9 @@ def inject_team_to_ram(
         party_count_addr = RamLocation.OPPONENT_PARTY_COUNT
     else:
         party_count_addr = RamLocation.PARTY_COUNT
+        ram[RamLocation.PARTY_0_ID + len(team)] = 255
 
-    # debug with only one pokemon
-    # with more that one pokemons, the other pokemons in the pary are invisible...?
-    # also, opponent pokemons do not change, check into the ram if the values we set are not reset to something else
-    # at some point.
-    if is_opponent:
-        team = team[:1]
-    else:
-        team = team[:3]
 
+    ram[party_count_addr] = len(team)
     for i, pokemon in enumerate(team):
         pokemon.inject_at(ram, i, is_opponent=is_opponent)
-    ram[party_count_addr] = len(team)
