@@ -200,18 +200,19 @@ class SampledPokemon(NamedTuple):
                 ram[RamLocation.ENEMY_LEVEL + 14] = self.stats.level
 
                 hp_iv = (
-                        ((self.stats.ivs.attack & 1) << 0) |
-                        ((self.stats.ivs.attack & 1) << 1) |
-                        ((self.stats.ivs.speed & 1) << 2) |
-                        ((self.stats.ivs.speed & 1) << 3)
+                        ((self.stats.ivs.attack & 1) << 3) |
+                        ((self.stats.ivs.attack & 1) << 2) |
+                        ((self.stats.ivs.speed & 1) << 1) |
+                        ((self.stats.ivs.speed & 1) << 0)
                 )
 
-                ram[0xCFF1] = self.stats.ivs.attack
-                ram[0xCFF2] = self.stats.ivs.speed
+                ram[RamLocation.ENEMY_POKEMON_IVS_ATTACK_DEFENSE] = self.stats.ivs.attack
+                ram[RamLocation.ENEMY_POKEMON_IVS_SPEED_SPECIAL] = self.stats.ivs.speed
 
                 self.stats.ivs = PokemonBaseStats(hp=hp_iv, attack=self.stats.ivs.attack, defense=self.stats.ivs.attack, speed=self.stats.ivs.speed, special=self.stats.ivs.speed)
 
                 scaled_stats = self.stats.scale()
+
                 # HP
                 a, b = to_double(scaled_stats.hp)
                 ram[RamLocation.ENEMY_POKEMON_MAX_HP] = b
@@ -261,60 +262,65 @@ class SampledPokemon(NamedTuple):
                 e1, e2, e3 = to_triple(self.stats.exp)
                 ram[RamLocation.ENEMY_POKEMON_EXPERIENCE + index * DataStructDimension.POKEMON_STATS] = e3
 
+            # Opponent
 
-            if index >= 0:
-                ram[RamLocation.OPPONENT_POKEMON_0_ID + index] = self.stats.pokemon
-                ram[RamLocation.OPPONENT_POKEMON_0_SPECIES + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
-                ram[RamLocation.OPPONENT_POKEMON_0_LEVEL + index * DataStructDimension.POKEMON_STATS] = self.stats.level
-                ram[RamLocation.OPPONENT_POKEMON_0_STATUS + index * DataStructDimension.POKEMON_STATS] = 0
+            ram[RamLocation.OPPONENT_POKEMON_0_ID + index] = self.stats.pokemon
+            ram[RamLocation.OPPONENT_POKEMON_0_SPECIES + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
+            ram[RamLocation.OPPONENT_POKEMON_0_LEVEL + index * DataStructDimension.POKEMON_STATS] = self.stats.level
+            ram[RamLocation.OPPONENT_POKEMON_0_STATUS + index * DataStructDimension.POKEMON_STATS] = 0
 
-                pokemon_data = PokemonDatas[self.stats.pokemon]
+            pokemon_data = PokemonDatas[self.stats.pokemon]
 
-                # Types
-                ram[RamLocation.OPPONENT_POKEMON_0_TYPE0 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[0].unfix()
-                ram[RamLocation.OPPONENT_POKEMON_0_TYPE1 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[1].unfix()
+            # Types
+            ram[RamLocation.OPPONENT_POKEMON_0_TYPE0 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[0].unfix()
+            ram[RamLocation.OPPONENT_POKEMON_0_TYPE1 + index * DataStructDimension.POKEMON_STATS] = pokemon_data.types[1].unfix()
 
-                # Moves
-                for i, move in enumerate(self.moves + [Move.NO_MOVE] * (4 - len(self.moves))):
-                    ram[RamLocation.OPPONENT_POKEMON_0_MOVE0 + i + index * DataStructDimension.POKEMON_STATS] = move
-                    ram[RamLocation.OPPONENT_POKEMON_0_MOVE0_PP + i + index * DataStructDimension.POKEMON_STATS] = MovesInfo[move].pp
+            # Moves
+            for i, move in enumerate(self.moves + [Move.NO_MOVE] * (4 - len(self.moves))):
+                ram[RamLocation.OPPONENT_POKEMON_0_MOVE0 + i + index * DataStructDimension.POKEMON_STATS] = move
+                ram[RamLocation.OPPONENT_POKEMON_0_MOVE0_PP + i + index * DataStructDimension.POKEMON_STATS] = MovesInfo[move].pp
 
-                scaled_stats = self.stats.scale()
+            self.stats.ivs = PokemonBaseStats(hp=8, attack=9, defense=8,
+                                              speed=8, special=8)
 
-                # HP
-                a, b = to_double(scaled_stats.hp) # There is modification of maxhp after ~10 frames after the start of the fight
-                ram[RamLocation.OPPONENT_POKEMON_0_MAX_HP + index * DataStructDimension.POKEMON_STATS] = b
-                ram[RamLocation.OPPONENT_POKEMON_0_MAX_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
+            ram[RamLocation.OPPONENT_POKEMON_0_IV_ATTACK_DEFENSE + index * DataStructDimension.POKEMON_STATS] = self.stats.ivs.attack
+            ram[RamLocation.OPPONENT_POKEMON_0_IV_SPEED_SPECIAL + index * DataStructDimension.POKEMON_STATS] = self.stats.ivs.speed
 
-                ram[RamLocation.OPPONENT_POKEMON_0_HP + index * DataStructDimension.POKEMON_STATS] = b
-                ram[RamLocation.OPPONENT_POKEMON_0_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
+            scaled_stats = self.stats.scale()
 
-                # Attack
-                a, b = to_double(scaled_stats.attack)
-                ram[RamLocation.OPPONENT_POKEMON_0_ATTACK + index * DataStructDimension.POKEMON_STATS] = b
-                ram[RamLocation.OPPONENT_POKEMON_0_ATTACK + 1 + index * DataStructDimension.POKEMON_STATS] = a
+            # HP
+            a, b = to_double(scaled_stats.hp)
+            ram[RamLocation.OPPONENT_POKEMON_0_MAX_HP + index * DataStructDimension.POKEMON_STATS] = b
+            ram[RamLocation.OPPONENT_POKEMON_0_MAX_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
 
-                # Defense
+            ram[RamLocation.OPPONENT_POKEMON_0_HP + index * DataStructDimension.POKEMON_STATS] = b
+            ram[RamLocation.OPPONENT_POKEMON_0_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
 
-                a, b = to_double(scaled_stats.defense)
-                ram[RamLocation.OPPONENT_POKEMON_0_DEFENSE + index * DataStructDimension.POKEMON_STATS] = b
-                ram[RamLocation.OPPONENT_POKEMON_0_DEFENSE + 1 + index * DataStructDimension.POKEMON_STATS] = a
+            # Attack
+            a, b = to_double(scaled_stats.attack)
+            ram[RamLocation.OPPONENT_POKEMON_0_ATTACK + index * DataStructDimension.POKEMON_STATS] = b
+            ram[RamLocation.OPPONENT_POKEMON_0_ATTACK + 1 + index * DataStructDimension.POKEMON_STATS] = a
 
-                # Speed
-                a, b = to_double(scaled_stats.speed)
-                ram[RamLocation.OPPONENT_POKEMON_0_SPEED + index * DataStructDimension.POKEMON_STATS] = b
-                ram[RamLocation.OPPONENT_POKEMON_0_SPEED + 1 + index * DataStructDimension.POKEMON_STATS] = a
+            # Defense
+            a, b = to_double(scaled_stats.defense)
+            ram[RamLocation.OPPONENT_POKEMON_0_DEFENSE + index * DataStructDimension.POKEMON_STATS] = b
+            ram[RamLocation.OPPONENT_POKEMON_0_DEFENSE + 1 + index * DataStructDimension.POKEMON_STATS] = a
 
-                # Special
-                a, b = to_double(scaled_stats.special)
-                ram[RamLocation.OPPONENT_POKEMON_0_SPECIAL + index * DataStructDimension.POKEMON_STATS] = b
-                ram[RamLocation.OPPONENT_POKEMON_0_SPECIAL + 1 + index * DataStructDimension.POKEMON_STATS] = a
+            # Speed
+            a, b = to_double(scaled_stats.speed)
+            ram[RamLocation.OPPONENT_POKEMON_0_SPEED + index * DataStructDimension.POKEMON_STATS] = b
+            ram[RamLocation.OPPONENT_POKEMON_0_SPEED + 1 + index * DataStructDimension.POKEMON_STATS] = a
 
-                # Experience
-                e1, e2, e3 = to_triple(self.stats.exp)
-                ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS] = e3
-                ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 1] = e2
-                ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 2] = e1
+            # Special
+            a, b = to_double(scaled_stats.special)
+            ram[RamLocation.OPPONENT_POKEMON_0_SPECIAL + index * DataStructDimension.POKEMON_STATS] = b
+            ram[RamLocation.OPPONENT_POKEMON_0_SPECIAL + 1 + index * DataStructDimension.POKEMON_STATS] = a
+
+            # Experience
+            e1, e2, e3 = to_triple(self.stats.exp)
+            ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS] = e3
+            ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 1] = e2
+            ram[RamLocation.OPPONENT_POKEMON_0_EXPERIENCE + index * DataStructDimension.POKEMON_STATS + 2] = e1
         else:
             poke_name = self.stats.pokemon.name
             for offset in range(0, DataStructDimension.POKEMON_NICKNAME):
@@ -330,6 +336,20 @@ class SampledPokemon(NamedTuple):
 
             # Status
             ram[RamLocation.PARTY_0_STATUS + index * DataStructDimension.POKEMON_STATS] = 0
+
+            # IVs
+            hp_iv = (
+                    ((self.stats.ivs.attack & 1) << 3) |
+                    ((self.stats.ivs.attack & 1) << 2) |
+                    ((self.stats.ivs.speed & 1) << 1) |
+                    ((self.stats.ivs.speed & 1) << 0)
+            )
+
+            self.stats.ivs = PokemonBaseStats(hp=hp_iv, attack=self.stats.ivs.attack, defense=self.stats.ivs.attack,
+                                              speed=self.stats.ivs.speed, special=self.stats.ivs.speed)
+
+            ram[RamLocation.PARTY_0_IV_ATTACK_DEFENSE] = self.stats.ivs.attack
+            ram[RamLocation.PARTY_0_IV_SPEED_SPECIAL] = self.stats.ivs.speed
 
             scaled_stats = self.stats.scale()
             pokemon_data = PokemonDatas[self.stats.pokemon]
@@ -357,17 +377,17 @@ class SampledPokemon(NamedTuple):
                 ram[RamLocation.PARTY_0_MOVE0 + i + index * DataStructDimension.POKEMON_STATS] = move
                 ram[RamLocation.PARTY_0_MOVE0_PP + i + index * DataStructDimension.POKEMON_STATS] = MovesInfo[move].pp
 
-            # trainer ID (use the ID of pokemon 1)
+            # trainer ID (use the ID of Pokemon 1)
             ram[RamLocation.PARTY_0_TRAINER_ID + index * DataStructDimension.POKEMON_STATS] = ram[RamLocation.PARTY_0_TRAINER_ID]
             ram[RamLocation.PARTY_0_TRAINER_ID + index * DataStructDimension.POKEMON_STATS + 1] = ram[RamLocation.PARTY_0_TRAINER_ID + 1]
 
             b1, b2 = to_double(scaled_stats.hp)
 
-            # max hp
+            # Max HP
             ram[RamLocation.PARTY_0_MAXHP + index * DataStructDimension.POKEMON_STATS] = b2
             ram[RamLocation.PARTY_0_MAXHP + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
-            # current hp
+            # Current HP
             ram[RamLocation.PARTY_0_HP + index * DataStructDimension.POKEMON_STATS] = b2
             ram[RamLocation.PARTY_0_HP + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
@@ -391,12 +411,12 @@ class SampledPokemon(NamedTuple):
             ram[RamLocation.PARTY_0_SPECIAL + index * DataStructDimension.POKEMON_STATS] = b2
             ram[RamLocation.PARTY_0_SPECIAL + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
-            # HP Ev
+            # HP EV
             b1, b2 = to_double(self.stats.evs.hp)
             ram[RamLocation.PARTY_0_HP_EV + index * DataStructDimension.POKEMON_STATS] = b2
             ram[RamLocation.PARTY_0_HP_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
-            #Attack EV
+            # Attack EV
             b1, b2 = to_double(self.stats.evs.attack)
             ram[RamLocation.PARTY_0_ATTACK_EV + index * DataStructDimension.POKEMON_STATS] = b2
             ram[RamLocation.PARTY_0_ATTACK_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
@@ -416,18 +436,7 @@ class SampledPokemon(NamedTuple):
             ram[RamLocation.PARTY_0_SPECIAL_EV + index * DataStructDimension.POKEMON_STATS] = b2
             ram[RamLocation.PARTY_0_SPECIAL_EV + index * DataStructDimension.POKEMON_STATS + 1] = b1
 
-            # IVs
-            hp_iv = (
-                    ((self.stats.ivs.attack & 1) << 0) |
-                    ((self.stats.ivs.attack & 1) << 1) |
-                    ((self.stats.ivs.speed & 1) << 2) |
-                    ((self.stats.ivs.speed & 1) << 3)
-            )
-            self.stats.ivs = PokemonBaseStats(hp=hp_iv, attack=self.stats.ivs.attack, defense=self.stats.ivs.attack,
-                                              speed=self.stats.ivs.speed, special=self.stats.ivs.speed)
 
-            ram[RamLocation.PARTY_0_ATTACK_DEFENSE_IV] = self.stats.ivs.attack
-            ram[RamLocation.PARTY_0_SPEED_SPECIAL_IV] = self.stats.ivs.speed
 
 
 class SampledBattle(NamedTuple):
@@ -489,7 +498,7 @@ class BattleSampler:
         """
         injects the type of battle, the team and opponent's team to the ram.
         """
-        is_wild = np.random.random() < 1#self.wild_battle_chance
+        is_wild = np.random.random() < self.wild_battle_chance
         path = self.wild_battle_savestate if is_wild else self.trainer_battle_savestate
         bag = self.sample_bag()
         global_level_mean = np.random.randint(*self.level_mean_bounds)

@@ -134,6 +134,7 @@ class PolarisRedArena(PolarisEnv):
 
         self.reward_scales = reward_scales
         self.done = False
+        self.count = 0
 
     def reset(
         self,
@@ -154,7 +155,9 @@ class PolarisRedArena(PolarisEnv):
         setattr(self.console, "old_tick", self.console.tick)
 
         ram_to_observe = [
-            RamLocation.ENEMY_POKEMON_SPECIES,
+            RamLocation.OPPONENT_POKEMON_0_EV_HP_OBSERVATION,
+            RamLocation.OPPONENT_POKEMON_0_IV_SPEED_SPECIAL,
+            RamLocation.OPPONENT_POKEMON_0_IV_ATTACK_DEFENSE,
             RamLocation.ENEMY_POKEMON_HP_OBSERVATION,
             RamLocation.ENEMY_POKEMON_MAX_HP_OBSERVATION,
         ]
@@ -174,7 +177,7 @@ class PolarisRedArena(PolarisEnv):
             print_ram_values()
 
 
-            if not gs.is_in_battle:
+            if not gs.is_in_battle: #or count < 15:
                 sampled_battle.inject_to_ram(self.console.memory)
             elif not self.done:
                 self.done = True
