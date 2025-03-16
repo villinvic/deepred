@@ -201,6 +201,14 @@ class PolarisRedArenaObservationSpace:
         )
         # recent pokemon centers, last checkpoint
 
+        is_in_battle = RamObservation(
+            extractor=lambda gamestate: gamestate.is_in_battle,
+            nature=ObsType.CONTINUOUS,
+            size=1,
+            scale=1.,  # everything was prescaled
+            domain=(0., 3.),
+        )
+
         self.observations = dict(
             ram=base_ram_observations,
             main_screen=pixel_observation,
@@ -223,8 +231,8 @@ class PolarisRedArenaObservationSpace:
             sent_out_party_attributes=sent_out_party_attributes_observation,
             sent_out_opp_attributes=sent_out_opp_attributes_observation,
 
-            sent_out_party_index=sent_out_party_index
-
+            sent_out_party_index=sent_out_party_index,
+            is_in_battle=is_in_battle,
         )
 
         # TODO: adapt and test for dtypes, and various types of observations

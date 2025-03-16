@@ -84,14 +84,14 @@ class SynchronousTrainer(Checkpointable):
         for pid, policy in self.policy_map.items():
             policy.options["hash_counts"] = self.visitation_counts[pid].get_counts()
         ##########################################################
-        self.ckpt_manager = EnvCheckpointManager(
-            temperature=config.env_checkpoint_temperature,
-            score_lr=config.env_checkpoint_score_lr,
-            min_save_states=config.min_save_states,
-            epsilon=config.env_checkpoint_epsilon,
-            checkpoint_path=config.env_checkpoint_path,
-        )
-        self.ckpt_manager.update()
+        # self.ckpt_manager = EnvCheckpointManager(
+        #     temperature=config.env_checkpoint_temperature,
+        #     score_lr=config.env_checkpoint_score_lr,
+        #     min_save_states=config.min_save_states,
+        #     epsilon=config.env_checkpoint_epsilon,
+        #     checkpoint_path=config.env_checkpoint_path,
+        # )
+        # self.ckpt_manager.update()
 
 
 
@@ -116,7 +116,7 @@ class SynchronousTrainer(Checkpointable):
         self.metrics = self.metricbank.metrics
 
         super().__init__(
-            checkpoint_config = config.checkpoint_config,
+            checkpoint_config=config.checkpoint_config,
 
             components={
                 "matchmaking": self.matchmaking,
@@ -124,7 +124,7 @@ class SynchronousTrainer(Checkpointable):
                 "params_map": self.params_map,
                 "metrics": self.metrics,
                 "visitation_counts": self.visitation_counts,
-                "ckpt_manager": self.ckpt_manager
+                #"ckpt_manager": self.ckpt_manager
             }
         )
 
@@ -182,7 +182,6 @@ class SynchronousTrainer(Checkpointable):
                     if w not in self.worker_set.available_workers:
                         print(f"Worker still running:{w}....")
 
-
         enqueue_time_start = time.time()
         num_batch = 0
 
@@ -200,11 +199,11 @@ class SynchronousTrainer(Checkpointable):
                             = self.visitation_counts[pid].get_counts()
                     else:
                         print('Has not found any visitation counts in the metrics?')
-                    env_ckpt_id, env_ckpt_score = exp_batch.custom_metrics.pop("to_pop/env_ckpt", (None, None))
-                    if env_ckpt_id is not None:
-                        self.ckpt_manager.update_scores(env_ckpt_id , env_ckpt_score)
-                    else:
-                        pass
+                    # env_ckpt_id, env_ckpt_score = exp_batch.custom_metrics.pop("to_pop/env_ckpt", (None, None))
+                    # if env_ckpt_id is not None:
+                    #     self.ckpt_manager.update_scores(env_ckpt_id , env_ckpt_score)
+                    # else:
+                    #     pass
                         # we go there if no env checkpoint was generated yet.
 
 
@@ -231,12 +230,12 @@ class SynchronousTrainer(Checkpointable):
                     # toss the batch...
                     pass
 
-        self.ckpt_manager.update()
-        for pid, policy in self.policy_map.items():
-            policy.options["env_ckpt_sampler"] = self.ckpt_manager.get_sampler()
-
-        for pid, batches in to_push.items():
-            self.experience_queue[pid].push(batches)
+        #self.ckpt_manager.update()
+        # for pid, policy in self.policy_map.items():
+        #     policy.options["env_ckpt_sampler"] = self.ckpt_manager.get_sampler()
+        #
+        # for pid, batches in to_push.items():
+        #     self.experience_queue[pid].push(batches)
         if frames > 0:
             GlobalTimer[GlobalTimer.PREV_FRAMES] = time.time()
             prev_frames_dt = GlobalTimer.dt(GlobalTimer.PREV_FRAMES)
@@ -273,7 +272,7 @@ class SynchronousTrainer(Checkpointable):
                 *b
             ))
 
-        if len(training_metrics)> 0:
+        if len(training_metrics) > 0:
             for pid, policy_training_metrics in training_metrics.items():
                 policy_training_metrics = mean_metric_batch([policy_training_metrics])
                 self.metricbank.update(policy_training_metrics, prefix=f"training/{pid}/",
@@ -283,16 +282,16 @@ class SynchronousTrainer(Checkpointable):
                 self.metricbank.update(tree.flatten_with_path(metrics), prefix=f"experience/",
                                        smoothing=self.config.episode_metrics_smoothing)
 
-        self.metricbank.update(tree.flatten_with_path(self.ckpt_manager.get_metrics()), prefix=f"ckpt_manager/",
-                               smoothing=0.8)
+        # self.metricbank.update(tree.flatten_with_path(self.ckpt_manager.get_metrics()), prefix=f"ckpt_manager/",
+        #                        smoothing=0.8)
         ram_info = psutil.virtual_memory()
 
         misc_metrics =  [
                     (f'{pi}_queue_length', queue.size())
                     for pi, queue in self.experience_queue.items()
                 ] + [('RAM_percent_usage', ram_info.percent)]
-        if len(self.ckpt_manager.distribution) > 0:
-            misc_metrics.append(("ckpt_sampling_probs", self.ckpt_manager.distribution))
+        # if len(self.ckpt_manager.distribution) > 0:
+        #     misc_metrics.append(("ckpt_sampling_probs", self.ckpt_manager.distribution))
         if frames > 0:
             misc_metrics.append(("FPS", frames / prev_frames_dt))
         if enqueue_time_ms is not None:

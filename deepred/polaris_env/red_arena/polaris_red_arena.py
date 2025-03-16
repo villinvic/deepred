@@ -47,11 +47,10 @@ class PolarisRedArena(PolarisEnv):
 
     env_id = "PolarisRedArena"
 
-
     def __init__(
             self,
             env_index=-1,
-            game_path: str = "faster_red.gbc",
+            game_path: str = "faster_red6.gbc",
             episode_length=500,
             human_inputs: bool = False,
             downscaled_screen_shape: Tuple = (72, 80),
@@ -61,6 +60,7 @@ class PolarisRedArena(PolarisEnv):
             wild_battle_savestate: str = "wild_battle.state",
             trainer_battle_savestate: str = "trainer_battle.state",
             level_mean_bounds: Tuple[int, int] = (5, 60),
+            checkpoint_identifiers: Tuple[str] = ("map",),
             party_level_std_max: int = 10,
             opponent_level_std_max: int = 3,
             wild_battle_chance: float = 0.5,
@@ -156,10 +156,6 @@ class PolarisRedArena(PolarisEnv):
 
         ram_to_observe = [
             RamLocation.OPPONENT_POKEMON_0_EV_HP_OBSERVATION,
-            RamLocation.OPPONENT_POKEMON_0_IV_SPEED_SPECIAL,
-            RamLocation.OPPONENT_POKEMON_0_IV_ATTACK_DEFENSE,
-            RamLocation.ENEMY_POKEMON_HP_OBSERVATION,
-            RamLocation.ENEMY_POKEMON_MAX_HP_OBSERVATION,
         ]
         self.reward_function = PolarisRedArenaRewardFunction(
             reward_scales=self.reward_scales,
@@ -185,7 +181,7 @@ class PolarisRedArena(PolarisEnv):
 
             return gs
 
-        setattr(self.console, "tick", hook)
+        #setattr(self.console, "tick", hook)
 
 
         self.input_dict = self.observation_space.sample()
@@ -227,7 +223,7 @@ class PolarisRedArena(PolarisEnv):
             self.on_episode_end()
 
         # you should only modify how we get observations, rewards and dones
-        return {0: self.input_dict}, rewards, dones, dones, self.empty_info_dict
+        return {0: self.input_dict}, {0: rewards}, dones, dones, self.empty_info_dict
 
     def on_episode_end(self):
         self.console.terminate_video()

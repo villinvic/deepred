@@ -498,7 +498,7 @@ class BattleSampler:
         """
         injects the type of battle, the team and opponent's team to the ram.
         """
-        is_wild = np.random.random() < self.wild_battle_chance
+        is_wild = np.random.random() < 0#self.wild_battle_chance
         path = self.wild_battle_savestate if is_wild else self.trainer_battle_savestate
         bag = self.sample_bag()
         global_level_mean = np.random.randint(*self.level_mean_bounds)
