@@ -58,7 +58,7 @@ class PolarisRed(PolarisEnv):
             render: bool = True,
             record: bool = False,
             speed_limit: int = 1,
-            record_skipped_frame: bool= False,
+            record_skipped_frame: bool = False,
             stream: bool = True,
             bot_name: str = "deepred",
             ** config

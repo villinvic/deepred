@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Tuple, Union, Dict, Any, SupportsFloat
+import signal
 
+from gymnasium.error import ResetNeeded
 from gymnasium.core import ObsType, ActType
 from polaris.environments import PolarisEnv
 
@@ -11,6 +13,11 @@ from deepred.polaris_env.red_arena.observation_space import PolarisRedArenaObser
 from deepred.polaris_env.red_arena.battle_sampler import BattleSampler
 from deepred.polaris_env.red_arena.rewards import PolarisRedArenaRewardFunction
 
+def timeout_handler(signum, frame):
+    raise ResetNeeded("Took too long to handle event.")
+
+# Set the timeout signal
+signal.signal(signal.SIGALRM, timeout_handler)
 
 class PolarisRedArena(PolarisEnv):
     """
@@ -61,13 +68,18 @@ class PolarisRedArena(PolarisEnv):
             trainer_battle_savestate: str = "trainer_battle.state",
             level_mean_bounds: Tuple[int, int] = (5, 60),
             checkpoint_identifiers: Tuple[str] = ("map",),
+            max_num_savestates_per_checkpoint: int = 15,
             party_level_std_max: int = 10,
             opponent_level_std_max: int = 3,
             wild_battle_chance: float = 0.5,
             enabled_patches: Tuple[str] = (),
             session_path: str = "red_arena_tests",
             render: bool = True,
+            record: bool = False,
+            record_skipped_frame: bool = False,
             speed_limit: int = 1,
+            default_savestate: Union[None, str] = None,
+
             **config
     ):
         super().__init__(env_index, **config)
@@ -96,14 +108,15 @@ class PolarisRedArena(PolarisEnv):
             game_path=game_path,
             render=self.render,
             speed_limit=speed_limit,
-            record=False,
-            record_skipped_frames=False,
+            record=record and env_index == 0,
+            record_skipped_frames=record_skipped_frame and env_index == 0,
             output_dir=self.session_path / Path(f"console_{self.env_index}"),
-            default_savestate=None,
+            default_savestate=default_savestate,
             map_history_length=1,
             flag_history_length=1,
             enabled_patches=enabled_patches,
-            checkpoint_identifiers=None,
+            #checkpoint_identifiers=checkpoint_identifiers,
+            max_num_savestates_per_checkpoint=max_num_savestates_per_checkpoint,
             **config
         )
 
@@ -134,7 +147,6 @@ class PolarisRedArena(PolarisEnv):
 
         self.reward_scales = reward_scales
         self.done = False
-        self.count = 0
 
     def reset(
         self,
@@ -155,7 +167,7 @@ class PolarisRedArena(PolarisEnv):
         setattr(self.console, "old_tick", self.console.tick)
 
         ram_to_observe = [
-            RamLocation.OPPONENT_POKEMON_0_EV_HP_OBSERVATION,
+            RamLocation.ENEMY_POKEMON_TYPE0,
         ]
         self.reward_function = PolarisRedArenaRewardFunction(
             reward_scales=self.reward_scales,
@@ -166,14 +178,14 @@ class PolarisRedArena(PolarisEnv):
                 print(f"{addr.name:<30}: {self.console.memory[addr]}")
 
         def hook(count, render):
-            print("-----RAM BEFORE GAME UPDATE-----")
-            print_ram_values()
+            # print("-----RAM BEFORE GAME UPDATE-----")
+            # print_ram_values()
             gs = self.console.old_tick(count, render)
-            print("-----RAM AFTER GAME UPDATE-----")
-            print_ram_values()
+            # print("-----RAM AFTER GAME UPDATE-----")
+            # print_ram_values()
 
 
-            if not gs.is_in_battle: #or count < 15:
+            if not gs.is_in_battle:
                 sampled_battle.inject_to_ram(self.console.memory)
             elif not self.done:
                 self.done = True
@@ -181,7 +193,7 @@ class PolarisRedArena(PolarisEnv):
 
             return gs
 
-        #setattr(self.console, "tick", hook)
+        setattr(self.console, "tick", hook)
 
 
         self.input_dict = self.observation_space.sample()
@@ -195,8 +207,10 @@ class PolarisRedArena(PolarisEnv):
 
     def step(
         self,
-        action_dict
+        action_dict: dict[int, int]
     ):
+
+
         event = self.input_interface.get_event(action_dict[0], self.console.get_gamestate())
 
         gamestate = self.console.process_event(event)
@@ -219,8 +233,9 @@ class PolarisRedArena(PolarisEnv):
             0: done,
         }
 
-        if done or gamestate._additional_memory.battle_staling_checker.is_battle_staling():
+        if done or gamestate._additional_memory.battle_staling_checker.is_battle_staling() or not gamestate.is_in_battle:
             self.on_episode_end()
+            self.reset()
 
         # you should only modify how we get observations, rewards and dones
         return {0: self.input_dict}, {0: rewards}, dones, dones, self.empty_info_dict
@@ -233,7 +248,5 @@ class PolarisRedArena(PolarisEnv):
         TODO
         :return: metrics for the episode (reported to wandb)
         """
-
-        metrics = {}
-
+        metrics = {"step_count": self.step_count}
         return metrics

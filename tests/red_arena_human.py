@@ -41,6 +41,7 @@ def cfg():
         party_level_std_max=10,
         opponent_level_std_max=3,
         wild_battle_chance=1.0,
+        record=False,
     )
 
     default_policy_config = {
@@ -70,7 +71,7 @@ def cfg():
     model_class = 'ArenaModel'
 
     env = PolarisRedArena.env_id
-    num_workers = 24
+    num_workers = 16
 
     trajectory_length = 512
     max_seq_len = trajectory_length  # if we use RNNs, this should be set to something like 16 or 32. (we should not need rnns)
@@ -100,6 +101,15 @@ def cfg():
     min_save_states = 50  # minimum number of savestates before initialsing a checkpoint.
     env_checkpoint_epsilon = 0.2  # frequency at which we pick random checkpoints
 
+    compute_advantages_on_workers = True
+    wandb_logdir = 'wandb_logs'
+    report_freq = 1
+    episode_metrics_smoothing = 0.95
+    training_metrics_smoothing = 0.5
+
+    name = "test_red_arena"
+
+
 @ex.automain
 def main(_config):
     tf.compat.v1.enable_eager_execution()
@@ -112,15 +122,15 @@ def main(_config):
     dummy_env = PolarisRedArena(**config["env_config"])
     dummy_env.register()
 
+    wandb.init(
+        config=_config,
+        project="deepred",
+        mode='online',
+        group="debug",
+        name=config["name"],
+        notes=None,
+        dir=config["wandb_logdir"]
+    )
+
     trainer = SynchronousTrainer(config)
     trainer.run()
-
-    # env.reset()
-    # action = None
-    #
-    # for i in range(_config["episode_length"]):
-    #     if not env.input_interface.human_inputs:
-    #         action = env.action_space.sample()
-    #         time.sleep(0.25)
-    #
-    #     observations, rewards, _, _, _ = env.step({0: action})
