@@ -489,8 +489,12 @@ class GameState:
         types = np.full((2,), fill_value=FixedPokemonType.NO_TYPE, dtype=np.uint8)
         if self.is_in_battle:
             # also opp sent out types
-            type1 = PokemonType(self._read(RamLocation.ENEMY_POKEMON_TYPE0)).fix()
-            type2 = PokemonType(self._read(RamLocation.ENEMY_POKEMON_TYPE1)).fix()
+            try:
+                type1 = PokemonType(self._read(RamLocation.ENEMY_POKEMON_TYPE0)).fix()
+                type2 = PokemonType(self._read(RamLocation.ENEMY_POKEMON_TYPE1)).fix()
+            except ValueError as e:
+                type1 = PokemonType.NORMAL.fix()
+                type2 = PokemonType.NO_TYPE.fix()
             if type1 == type2:
                 type2 = FixedPokemonType.NO_TYPE
             types[:] = type1, type2

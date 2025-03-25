@@ -161,7 +161,7 @@ class PolarisRedArena(PolarisEnv):
         """
         sampled_battle = self.battle_sampler()
         initial_gamestate = self.console.reset(sampled_battle)
-
+        print(initial_gamestate.is_in_battle)
         # add a hook to the console tick function
         # so that we update the ram each frame before the battle begins
         setattr(self.console, "old_tick", self.console.tick)
@@ -177,7 +177,7 @@ class PolarisRedArena(PolarisEnv):
             for addr in ram_to_observe:
                 print(f"{addr.name:<30}: {self.console.memory[addr]}")
 
-        def hook(count, render):
+        def hook(count, render=False):
             # print("-----RAM BEFORE GAME UPDATE-----")
             # print_ram_values()
             gs = self.console.old_tick(count, render)
@@ -227,7 +227,7 @@ class PolarisRedArena(PolarisEnv):
             rewards -= self.reward_scales["early_termination"]"""
 
         self.step_count += 1
-        done = self.step_count >= self.episode_length# or early_termination
+        done = self.step_count >= self.episode_length or not gamestate.is_in_battle# or early_termination
         dones = {
             "__all__": done,
             0: done,
@@ -235,7 +235,6 @@ class PolarisRedArena(PolarisEnv):
 
         if done or gamestate._additional_memory.battle_staling_checker.is_battle_staling() or not gamestate.is_in_battle:
             self.on_episode_end()
-            self.reset()
 
         # you should only modify how we get observations, rewards and dones
         return {0: self.input_dict}, {0: rewards}, dones, dones, self.empty_info_dict

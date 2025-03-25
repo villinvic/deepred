@@ -201,8 +201,8 @@ class GBConsole(PyBoy):
         # Skip frames until we are actionable.
         try:
             self.skip_frames()
-        except RecursionError as e:
-            self.handle_error("Stuck stepping the console.")
+        except Exception as e:
+            self.handle_error(f"Stuck stepping the console.{e}")
 
     def tick(self, count=1, render=True) -> GameState:
 
@@ -367,31 +367,31 @@ class GBConsole(PyBoy):
         """
         Main function for processing bot inputs
         """
-        try:
-            if event == CustomEvent.ROLL_PARTY:
-                self.agent_helper.roll_party(gamestate=self._gamestate)
-                return self.get_actionable_frame()
+        #try:
+        if event == CustomEvent.ROLL_PARTY:
+            self.agent_helper.roll_party(gamestate=self._gamestate)
+            return self.get_actionable_frame()
 
-            if self._gamestate.is_in_battle:
-                finalise = self.handle_battle_event(event)
-            else:
-                finalise = self.handle_world_event(event)
+        if self._gamestate.is_in_battle:
+            finalise = self.handle_battle_event(event)
+        else:
+            finalise = self.handle_world_event(event)
 
-            if finalise:
-                self.step_event(event)
+        if finalise:
+            self.step_event(event)
 
-            self.get_actionable_frame()
+        self.get_actionable_frame()
 
-            if self._checkpointer is not None:
-                self._checkpointer.do_checkpoint_if_needed(
-                    self.save_state,
-                    self._gamestate,
-                )
+        if self._checkpointer is not None:
+            self._checkpointer.do_checkpoint_if_needed(
+                self.save_state,
+                self._gamestate,
+            )
 
-            return self._gamestate
+        return self._gamestate
 
-        except Exception as e:
-            self.handle_error(str(e))
+        # except Exception as e:
+        #     self.handle_error(str(e))
 
 
 
