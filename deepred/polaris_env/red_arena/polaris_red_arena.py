@@ -156,12 +156,10 @@ class PolarisRedArena(PolarisEnv):
     ) -> tuple[ObsType, dict[str, Any]]:
         """
         Called each time we want to initialise the environment for a new episode
-
-        TODO
         """
+        print("reset")
         sampled_battle = self.battle_sampler()
         initial_gamestate = self.console.reset(sampled_battle)
-        print(initial_gamestate.is_in_battle)
         # add a hook to the console tick function
         # so that we update the ram each frame before the battle begins
         setattr(self.console, "old_tick", self.console.tick)
@@ -180,10 +178,11 @@ class PolarisRedArena(PolarisEnv):
         def hook(count, render=False):
             # print("-----RAM BEFORE GAME UPDATE-----")
             # print_ram_values()
+
             gs = self.console.old_tick(count, render)
+
             # print("-----RAM AFTER GAME UPDATE-----")
             # print_ram_values()
-
 
             if not gs.is_in_battle:
                 sampled_battle.inject_to_ram(self.console.memory)
@@ -191,10 +190,10 @@ class PolarisRedArena(PolarisEnv):
                 self.done = True
                 sampled_battle.inject_to_ram(self.console.memory)
 
+
             return gs
 
-        setattr(self.console, "tick", hook)
-
+        #setattr(self.console, "tick", hook)
 
         self.input_dict = self.observation_space.sample()
         self.observation_interface.inject(
@@ -202,6 +201,8 @@ class PolarisRedArena(PolarisEnv):
             self.input_dict
         )
         self.step_count = 0
+        self.done = False
+        sampled_battle.inject_to_ram(self.console.memory)
         # c.f. polaris_red.py to update the observations.
         return {0: self.input_dict}, self.empty_info_dict
 
@@ -209,17 +210,15 @@ class PolarisRedArena(PolarisEnv):
         self,
         action_dict: dict[int, int]
     ):
-
-
         event = self.input_interface.get_event(action_dict[0], self.console.get_gamestate())
 
         gamestate = self.console.process_event(event)
 
-        rewards = self.reward_function.compute_step_rewards(gamestate)
         self.observation_interface.inject(
             gamestate,
             self.input_dict
         )
+        rewards = self.reward_function.compute_step_rewards(gamestate)
 
         # Will see if is_lazy can be useful to be True
         """early_termination = self.reward_function.is_lazy()
@@ -232,8 +231,8 @@ class PolarisRedArena(PolarisEnv):
             "__all__": done,
             0: done,
         }
-
         if done or gamestate._additional_memory.battle_staling_checker.is_battle_staling() or not gamestate.is_in_battle:
+            print("done")
             self.on_episode_end()
 
         # you should only modify how we get observations, rewards and dones

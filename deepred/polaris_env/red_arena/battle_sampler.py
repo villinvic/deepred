@@ -263,7 +263,6 @@ class SampledPokemon(NamedTuple):
                 ram[RamLocation.ENEMY_POKEMON_EXPERIENCE + index * DataStructDimension.POKEMON_STATS] = e3
 
             # Opponent
-
             ram[RamLocation.OPPONENT_POKEMON_0_ID + index] = self.stats.pokemon
             ram[RamLocation.OPPONENT_POKEMON_0_SPECIES + index * DataStructDimension.POKEMON_STATS] = self.stats.pokemon
             ram[RamLocation.OPPONENT_POKEMON_0_LEVEL + index * DataStructDimension.POKEMON_STATS] = self.stats.level
@@ -294,7 +293,7 @@ class SampledPokemon(NamedTuple):
             ram[RamLocation.OPPONENT_POKEMON_0_MAX_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
 
             ram[RamLocation.OPPONENT_POKEMON_0_HP + index * DataStructDimension.POKEMON_STATS] = b
-            ram[RamLocation.OPPONENT_POKEMON_0_HP + 1 + index * DataStructDimension.POKEMON_STATS] = a
+            ram[RamLocation.OPPONENT_POKEMON_0_HP + 1 + index * DataStructDimension.POKEMON_STATS] = 2#a
 
             # Attack
             a, b = to_double(scaled_stats.attack)
